@@ -14,7 +14,7 @@ export class UserService {
     });
   }
 
-  async getAllUsers(params: {
+  async getMultipleUsers(params: {
     skip?: number;
     take?: number;
     cursor?: Prisma.UserWhereUniqueInput;
