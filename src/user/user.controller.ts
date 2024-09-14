@@ -8,12 +8,11 @@ import {
   Delete,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { AuthService } from '../auth/auth.service';
 import { User, User as UserModel } from '@prisma/client';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService, private authService: AuthService) {}
+  constructor(private readonly userService: UserService) {}
 
   @Post('register')
   async signupUser(
