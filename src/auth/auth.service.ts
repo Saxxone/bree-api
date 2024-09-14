@@ -30,8 +30,6 @@ export class AuthService {
     const { password, ...result } = user;
 
     const payload = { sub: user.email, username: user.username };
-
-    console.log(jwtConstants.secret);
     
     return {
       ...result,
