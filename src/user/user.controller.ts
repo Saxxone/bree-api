@@ -9,11 +9,13 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User, User as UserModel } from '@prisma/client';
+import { Public } from 'src/auth/auth.guard';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Public()
   @Post('register')
   async signupUser(
     @Body()
