@@ -8,12 +8,12 @@ import {
   Delete,
 } from '@nestjs/common';
 import { UserService } from './user.service';
+import { AuthService } from '../auth/auth.service';
 import { User, User as UserModel } from '@prisma/client';
-import { UserLoginDto } from './dto/create-user.dto';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService, private authService: AuthService) {}
 
   @Post('register')
   async signupUser(
@@ -23,21 +23,13 @@ export class UserController {
     return this.userService.createUser(userData);
   }
 
-  @Post('login')
-  async loginUser(
-    @Body()
-    userData: UserLoginDto,
-  ): Promise<Partial<UserModel>> {
-    return this.userService.login(userData);
-  }
-
   @Get('/:id')
   async getPostById(@Param('id') id: string): Promise<UserModel> {
-    return this.userService.findUser({ id: String(id) });
+    return this.userService.findUser( id );
   }
 
   @Get('filtered-users/:searchString')
-  async getFilteredPosts(
+  async getFilteredUsers(
     @Param('searchString') searchString: string,
   ): Promise<UserModel[]> {
     return this.userService.getMultipleUsers({

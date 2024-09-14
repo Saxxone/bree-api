@@ -9,10 +9,15 @@ export class UserService {
   constructor(private prisma: PrismaService) {}
 
   async findUser(
-    userWhereUniqueInput: Prisma.UserWhereUniqueInput,
+    usernameOrEmail: string,
   ): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: userWhereUniqueInput,
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: usernameOrEmail },
+          { email: usernameOrEmail },
+        ],
+      },
     });
   }
 
@@ -43,35 +48,6 @@ export class UserService {
     return this.prisma.user.create({
       data
     });
-  }
-
-  async login(data: {
-    email: string;
-    password: string;
-  }): Promise<Partial<User>> {
-
-    const user = await this.prisma.user.findUnique({
-      where: {
-        email: data.email 
-      } 
-    });
-
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-
-    const isPasswordValid = await bcrypt.compare(data.password, user.password);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException();
-    }
-
-    return {
-      id: user.id,
-      username: user.username,
-      name: user.name,
-      img: user.img
-    };
   }
 
   async updateUser(params: {
