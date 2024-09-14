@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -34,18 +34,44 @@ export class UserService {
   }
   
   async createUser(data: Prisma.UserCreateInput): Promise<User> {
-    const img = data.img ?? 'https://randomuser.me/api/portraits/men/90.jpg';
-
-    const hashedPassword = await bcrypt.hash(data.password, 10);
     data = {
       ...data,
-      img,
-      password: hashedPassword
+      img: data.img ?? 'https://randomuser.me/api/portraits/men/90.jpg',
+      password: await bcrypt.hash(data.password, 10)
     };
-    
+
     return this.prisma.user.create({
       data
     });
+  }
+
+  async login(data: {
+    email: string;
+    password: string;
+  }): Promise<Partial<User>> {
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: data.email 
+      } 
+    });
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const isPasswordValid = await bcrypt.compare(data.password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException();
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      img: user.img
+    };
   }
 
   async updateUser(params: {

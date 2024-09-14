@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User, User as UserModel } from '@prisma/client';
+import { UserLoginDto } from './dto/create-user.dto';
 
 @Controller('user')
 export class UserController {
@@ -17,15 +18,17 @@ export class UserController {
   @Post('register')
   async signupUser(
     @Body()
-    userData: {
-      name: string;
-      email: string;
-      password: string;
-      username: string;
-      img: string;
-    },
+    userData: UserModel,
   ): Promise<UserModel> {
     return this.userService.createUser(userData);
+  }
+
+  @Post('login')
+  async loginUser(
+    @Body()
+    userData: UserLoginDto,
+  ): Promise<Partial<UserModel>> {
+    return this.userService.login(userData);
   }
 
   @Get('/:id')
