@@ -25,7 +25,7 @@ export class UserController {
   }
 
   @Get('/:id')
-  async getPostById(@Param('id') id: string): Promise<UserModel> {
+  async getUserById(@Param('id') id: string): Promise<UserModel> {
     return this.userService.findUser( id );
   }
 
