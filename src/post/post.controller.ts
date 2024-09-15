@@ -6,6 +6,7 @@ import {
   Body,
   Put,
   Delete,
+  Request,
 } from '@nestjs/common';
 import { PostService } from './post.service';
 import { Post as PostModel } from '@prisma/client';
@@ -13,6 +14,45 @@ import { Post as PostModel } from '@prisma/client';
 @Controller('post')
 export class PostController {
   constructor(private readonly postService: PostService) {}
+
+
+  @Post('create-draft')
+  async createDraft(
+    @Request() req: any,
+    @Body() postData: { text?: string; img?: any },
+  ): Promise<PostModel> {
+    const { text, img } = postData;
+
+    return this.postService.createDraft({
+      text,
+      author: {
+        connect: { email: req.user.sub },
+      },
+    });
+  }
+
+  @Post('create-post')
+  async createPost(
+    @Request() req: any,
+    @Body() postData: { text?: string; img?: any },
+  ): Promise<PostModel> {
+    const { text, img } = postData;
+
+    return this.postService.createPost({
+      text,
+      author: {
+        connect: { email: req.user.sub },
+      },
+    });
+  }
+
+  @Put('publish/:id')
+  async publishPost(@Param('id') id: string): Promise<PostModel> {
+    return this.postService.updatePost({
+      where: { id: String(id) },
+      data: { published: true },
+    });
+  }
 
   @Get('/:id')
   async getPostById(@Param('id') id: string): Promise<PostModel> {
@@ -32,37 +72,8 @@ export class PostController {
   ): Promise<PostModel[]> {
     return this.postService.getMultiplePosts({
       where: {
-        OR: [
-          {
-            title: { contains: searchString },
-          },
-          {
-            text: { contains: searchString },
-          },
-        ],
+        text: { contains: searchString },
       },
-    });
-  }
-
-  @Post('post')
-  async createDraft(
-    @Body() postData: { title: string; text?: string; authorEmail: string },
-  ): Promise<PostModel> {
-    const { title, text, authorEmail } = postData;
-    return this.postService.createPost({
-      title,
-      text,
-      author: {
-        connect: { email: authorEmail },
-      },
-    });
-  }
-
-  @Put('publish/:id')
-  async publishPost(@Param('id') id: string): Promise<PostModel> {
-    return this.postService.updatePost({
-      where: { id: String(id) },
-      data: { published: true },
     });
   }
 

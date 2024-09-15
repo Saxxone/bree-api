@@ -10,6 +10,11 @@ import { Request } from 'express';
 import { SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core/services/reflector.service';
 
+interface JwtSubPayload {
+  sub: string;
+  username: string;
+}
+
 
 export const IS_PUBLIC_KEY = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
@@ -31,14 +36,14 @@ export class AuthGuard implements CanActivate {
 
     if (isPublic) return true;
     
-
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
+
     if (!token) {
       throw new UnauthorizedException();
     }
     try {
-      const payload = await this.jwtService.verifyAsync(
+      const payload: JwtSubPayload = await this.jwtService.verifyAsync(
         token,
         {
           secret: jwtConstants.secret

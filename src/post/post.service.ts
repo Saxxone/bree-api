@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Post, Prisma } from '@prisma/client';
+import { PostDto } from './dto/create-post.dto';
 
 @Injectable()
 export class PostService {
@@ -31,9 +32,20 @@ export class PostService {
     });
   }
 
-  async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+  async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
     return this.prisma.post.create({
       data,
+    });
+  }
+
+  async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+   const post = await this.prisma.post.create({
+      data,
+    });
+    
+    return this.updatePost({
+      where: { id: post.id },
+      data: { published: true },
     });
   }
 
