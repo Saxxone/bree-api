@@ -15,7 +15,6 @@ import { Post as PostModel } from '@prisma/client';
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
-
   @Post('create-draft')
   async createDraft(
     @Request() req: any,
@@ -59,9 +58,9 @@ export class PostController {
     return this.postService.findPost({ id: String(id) });
   }
 
-  @Get('feed')
+  @Post('feed')
   async getPublishedPosts(): Promise<PostModel[]> {
-    return this.postService.getMultiplePosts({
+    return await this.postService.getMultiplePosts({
       where: { published: true },
     });
   }

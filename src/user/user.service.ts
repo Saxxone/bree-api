@@ -3,20 +3,14 @@ import { PrismaService } from '../prisma.service';
 import { User, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  async findUser(
-    usernameOrEmail: string,
-  ): Promise<User | null> {
+  async findUser(usernameOrEmail: string): Promise<User | null> {
     return this.prisma.user.findFirst({
       where: {
-        OR: [
-          { username: usernameOrEmail },
-          { email: usernameOrEmail },
-        ],
+        OR: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
       },
     });
   }
@@ -37,16 +31,16 @@ export class UserService {
       orderBy,
     });
   }
-  
+
   async createUser(data: Prisma.UserCreateInput): Promise<User> {
     data = {
       ...data,
       img: data.img ?? 'https://randomuser.me/api/portraits/men/90.jpg',
-      password: await bcrypt.hash(data.password, 10)
+      password: await bcrypt.hash(data.password, 10),
     };
 
     return this.prisma.user.create({
-      data
+      data,
     });
   }
 

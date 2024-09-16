@@ -26,7 +26,7 @@ export class UserController {
 
   @Get('/:id')
   async getUserById(@Param('id') id: string): Promise<UserModel> {
-    return this.userService.findUser( id );
+    return this.userService.findUser(id);
   }
 
   @Get('filtered-users/:searchString')

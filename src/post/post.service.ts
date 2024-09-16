@@ -7,6 +7,23 @@ import { PostDto } from './dto/create-post.dto';
 export class PostService {
   constructor(private prisma: PrismaService) {}
 
+  async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
+    return this.prisma.post.create({
+      data,
+    });
+  }
+
+  async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+    const post = await this.prisma.post.create({
+      data,
+    });
+
+    return this.updatePost({
+      where: { id: post.id },
+      data: { published: true },
+    });
+  }
+
   async findPost(
     postWhereUniqueInput: Prisma.PostWhereUniqueInput,
   ): Promise<Post | null> {
@@ -29,23 +46,7 @@ export class PostService {
       cursor,
       where,
       orderBy,
-    });
-  }
-
-  async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
-    return this.prisma.post.create({
-      data,
-    });
-  }
-
-  async createPost(data: Prisma.PostCreateInput): Promise<Post> {
-   const post = await this.prisma.post.create({
-      data,
-    });
-    
-    return this.updatePost({
-      where: { id: post.id },
-      data: { published: true },
+      include: { author: true },
     });
   }
 
