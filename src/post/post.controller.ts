@@ -53,6 +53,22 @@ export class PostController {
     });
   }
 
+  @Put('bookmark/:id')
+  async bookmarkPost(@Param('id') id: string, @Request() req: any): Promise<PostModel> {
+    return this.postService.updatePost({
+      where: { id: String(id) },
+      data: { bookmarkedBy: { connect: { email: req.user.sub } } },
+    });
+  }
+
+  @Put('like/:id')
+  async likePost(@Param('id') id: string, @Request() req: any): Promise<PostModel> {
+    return this.postService.updatePost({
+      where: { id: String(id) },
+      data: { likedBy: { connect: { email: req.user.sub } } },
+    });
+  }
+
   @Get('/:id')
   async getPostById(@Param('id') id: string): Promise<PostModel> {
     return this.postService.findPost({ id: String(id) });
