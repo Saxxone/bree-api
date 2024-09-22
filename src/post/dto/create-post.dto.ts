@@ -5,6 +5,6 @@ export class PostDto {
   date: Date;
   title: string;
   text: string;
-  user: User;
+  author: User;
   img?: string;
 }
