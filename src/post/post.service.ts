@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Post, Prisma } from '@prisma/client';
-import { PostDto } from './dto/create-post.dto';
 
 @Injectable()
 export class PostService {
@@ -24,11 +23,9 @@ export class PostService {
     });
   }
 
-  async findPost(
-    postId: string,
-  ): Promise<Post | null> {
-  const post = await this.prisma.post.findUnique({
-      where: { id: postId }
+  async findPost(postId: string): Promise<Post | null> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
     });
 
     if (!post) {
@@ -97,7 +94,7 @@ export class PostService {
     data: Prisma.PostUpdateInput;
   }): Promise<Post> {
     const { data, where } = params;
-   
+
     return this.prisma.post.update({
       data,
       where,
@@ -127,16 +124,11 @@ export class PostService {
     return this.updatePost({
       where: { id: postId },
       data: {
-        likedBy: status
-          ? { disconnect: { email } } 
-          : { connect: { email } },
-          likeCount: status
-          ? post.likeCount - 1
-          : post.likeCount + 1,
+        likedBy: status ? { disconnect: { email } } : { connect: { email } },
+        likeCount: status ? post.likeCount - 1 : post.likeCount + 1,
       },
-    })
-  };
-
+    });
+  }
 
   async bookmarkPost(postId: string, email: string): Promise<Post> {
     const user = await this.prisma.user.findUnique({
@@ -155,21 +147,19 @@ export class PostService {
     if (!post) {
       throw new NotFoundException('Post not found');
     }
-  
+
     const status = (await this.checkIfUserBookmarkedPost(postId, email)).status;
 
     return this.updatePost({
       where: { id: postId },
       data: {
         bookmarkedBy: status
-          ? { disconnect: { email } } 
+          ? { disconnect: { email } }
           : { connect: { email } },
-        bookmarkCount: status
-          ? post.bookmarkCount - 1
-          : post.bookmarkCount + 1,
+        bookmarkCount: status ? post.bookmarkCount - 1 : post.bookmarkCount + 1,
       },
-    })
-  };
+    });
+  }
 
   async getPostLikes(postId: string): Promise<number> {
     const post = await this.prisma.post.findUnique({

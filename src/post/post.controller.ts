@@ -34,7 +34,7 @@ export class PostController {
   @Post('create-post')
   async createPost(
     @Request() req: any,
-    @Body() postData: { text?: string; media?: any, parentId? : string },
+    @Body() postData: { text?: string; media?: any; parentId?: string },
   ): Promise<PostModel> {
     const { text, media, parentId } = postData;
 
@@ -43,10 +43,11 @@ export class PostController {
       author: {
         connect: { email: req.user.sub },
       },
-      parent: {
-        connect: { id: parentId }
-      }
-
+      ...(parentId && {
+        parent: {
+          connect: { id: parentId },
+        },
+      }),
     });
   }
 
