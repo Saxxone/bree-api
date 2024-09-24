@@ -79,6 +79,13 @@ export class PostController {
     return await this.postService.viewSinglePost(id);
   }
 
+  @Get('/comments/:id')
+  async getCommentsForPost(@Param('id') id: string): Promise<PostModel[]> {
+    return await this.postService.getMultiplePosts({
+      where: { parent: { id: id } },
+    });
+  }
+
   @Post('/check-like/:id')
   async checkLikedByUser(
     @Param('id') id: string,
