@@ -17,14 +17,16 @@ export class PostService {
       data,
     });
 
-    if(post.parentId) this.incrementParentPostCommentCount(post.parentId);
-
-    return this.updatePost({
+    const p  = this.updatePost({
       where: { id: post.id },
       data: { 
         published: true,
        },
     });
+
+    if(post.parentId) this.incrementParentPostCommentCount(post.parentId);
+
+    return p
   }
 
   async findParentPost(postId: string): Promise<Post | null> {
