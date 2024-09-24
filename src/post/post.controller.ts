@@ -34,15 +34,19 @@ export class PostController {
   @Post('create-post')
   async createPost(
     @Request() req: any,
-    @Body() postData: { text?: string; media?: any },
+    @Body() postData: { text?: string; media?: any, parentId? : string },
   ): Promise<PostModel> {
-    const { text, media } = postData;
+    const { text, media, parentId } = postData;
 
     return await this.postService.createPost({
       text,
       author: {
         connect: { email: req.user.sub },
       },
+      parent: {
+        connect: { id: parentId }
+      }
+
     });
   }
 
@@ -103,6 +107,9 @@ export class PostController {
   async getPublishedPosts(): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { published: true },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
   }
 
