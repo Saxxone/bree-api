@@ -35,4 +35,22 @@ export class AuthService {
       }),
     };
   }
+
+  async signOut(email: string, pass: string): Promise<any> {
+    const user = await this.userService.findUser(email);
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const isPasswordValid = await bcrypt.compare(pass, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException();
+    }
+
+    return {
+      message: 'Logged out successfully',
+    };
+  }
 }

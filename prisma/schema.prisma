@@ -14,23 +14,37 @@ datasource db {
 }
 
 model User {
-  id              String @id @default(uuid())
-  email           String @unique
-  username        String @unique
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
   name            String
   img             String
   password        String
   posts           Post[]
-  likedPosts      Post[] @relation("likedPosts")
-  bookmarkedPosts Post[] @relation("bookmarkedPosts")
+  likedPosts      Post[]    @relation("likedPosts")
+  bookmarkedPosts Post[]    @relation("bookmarkedPosts")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 }
 
 model Post {
-  id           String   @id @default(uuid())
-  text         String?
-  published    Boolean? @default(false)
-  author       User     @relation(fields: [authorId], references: [id])
-  authorId     String
-  likedBy      User[]   @relation("likedPosts")
-  bookmarkedBy User[]   @relation("bookmarkedPosts")
+  id            String    @id @default(uuid())
+  text          String?
+  media         String?
+  mediaType     String?
+  published     Boolean?  @default(false)
+  author        User      @relation(fields: [authorId], references: [id])
+  authorId      String
+  likedBy       User[]    @relation("likedPosts")
+  likeCount     Int       @default(0)
+  bookmarkedBy  User[]    @relation("bookmarkedPosts")
+  bookmarkCount Int       @default(0)
+  parent        Post?     @relation("comments", fields: [parentId], references: [id])
+  parentId      String?
+  comments      Post[]    @relation("comments")
+  commentCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 }

@@ -21,6 +21,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push --force",
+    "prisma:format": "prisma format",
     "prisma:reset": "prisma migrate reset --force",
     "prisma:seed": "prisma db seed --preview-feature",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force"
