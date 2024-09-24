@@ -17,9 +17,34 @@ export class PostService {
       data,
     });
 
+    if(post.parentId) this.incrementParentPostCommentCount(post.parentId);
+
     return this.updatePost({
       where: { id: post.id },
-      data: { published: true },
+      data: { 
+        published: true,
+       },
+    });
+  }
+
+  async findParentPost(postId: string): Promise<Post | null> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+    });
+
+    if (!post) {
+      throw new NotFoundException('Parent post not found');
+    }
+
+    return post;
+  }
+
+  async incrementParentPostCommentCount(postId: string): Promise<Post> {
+    const parentPost = await this.findParentPost(postId);
+
+    return this.updatePost({
+      where: { id: postId },
+      data: { commentCount: parentPost.commentCount + 1 },
     });
   }
 
