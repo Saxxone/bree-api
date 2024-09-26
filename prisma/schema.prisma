@@ -18,9 +18,11 @@ model User {
   email           String    @unique
   username        String    @unique
   name            String
+  bio             String?
   img             String
   password        String
   posts           Post[]
+  files           File[]
   likedPosts      Post[]    @relation("likedPosts")
   bookmarkedPosts Post[]    @relation("bookmarkedPosts")
   createdAt       DateTime  @default(now())
@@ -31,7 +33,7 @@ model User {
 model Post {
   id            String    @id @default(uuid())
   text          String?
-  media         String?
+  media         String[]
   mediaType     String?
   published     Boolean?  @default(false)
   author        User      @relation(fields: [authorId], references: [id])
@@ -47,4 +49,28 @@ model Post {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
+}
+
+model File {
+  id           String    @id @default(uuid())
+  originalname String
+  filename     String
+  size         Int
+  type         String
+  url          String
+  path         String
+  mimetype     String
+  status       Status    @default(PENDING)
+  owner        User      @relation(fields: [ownerId], references: [id])
+  ownerId      String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+}
+
+enum Status {
+  PENDING
+  APPROVED
+  REJECTED
+  UPLOADED
 }

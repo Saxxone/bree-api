@@ -1,21 +1,40 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Post, Prisma } from '@prisma/client';
+import { FileService } from 'src/file/file.service';
 
 @Injectable()
 export class PostService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private fileService: FileService,
+    ) {}
 
   async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
-    return this.prisma.post.create({
+
+    const fileIds =  data.media as string[];
+    fileIds ?? await this.fileService.getFilesUrls(data.media as any);
+
+    const draft = this.prisma.post.create({
       data,
     });
+
+    fileIds ?? await this.fileService.markFileAsUploaded(fileIds);
+
+    return draft;
   }
 
   async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+
+    const fileIds =  data.media as string[];
+    fileIds ?? await this.fileService.getFilesUrls(data.media as any);
+
+
     const post = await this.prisma.post.create({
       data,
     });
+
+    fileIds ?? await this.fileService.markFileAsUploaded(fileIds);
 
     const p  = this.updatePost({
       where: { id: post.id },
