@@ -13,9 +13,9 @@ export class FileService {
   ) {}
   
 
-  async create(files: Array<Express.Multer.File>, email: string): Promise<Array<Express.Multer.File>> {
+  async create(files: Array<Express.Multer.File>, email: string): Promise<string[]> {
     const user = await this.userService.findUser(email);
-    const savedFiles = [];
+    const savedFiles: string[] = [];
 
     for (const file of files) {
       const savedFile = await this.prisma.file.create({
@@ -33,14 +33,14 @@ export class FileService {
           },
         } as Prisma.FileCreateInput
       });
-      savedFiles.push(savedFile);
+      savedFiles.push(savedFile.id);
     }
 
     return savedFiles
   }
 
   async getFilesUrls(fileIds: string[] | Prisma.PostCreatemediaInput[]): Promise<string[]> {
-    return Promise.all(fileIds.map(async (fileId) => {
+    const urls = await Promise.all(fileIds.map(async (fileId) => {
       const file = await this.prisma.file.findUnique({
         where: { id: fileId },
       });
@@ -51,6 +51,8 @@ export class FileService {
   
       return file.url;
     }));
+    
+    return urls;
   }
 
 

@@ -13,7 +13,8 @@ export class PostService {
   async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
 
     const fileIds =  data.media as string[];
-    fileIds ?? await this.fileService.getFilesUrls(data.media as any);
+
+    if(fileIds.length) data.media = await this.fileService.getFilesUrls(data.media as any);
 
     const draft = this.prisma.post.create({
       data,
@@ -27,8 +28,8 @@ export class PostService {
   async createPost(data: Prisma.PostCreateInput): Promise<Post> {
 
     const fileIds =  data.media as string[];
-    fileIds ?? await this.fileService.getFilesUrls(data.media as any);
 
+    if(fileIds.length) data.media = await this.fileService.getFilesUrls(data.media as any);
 
     const post = await this.prisma.post.create({
       data,

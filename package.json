@@ -36,7 +36,7 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^10.4.4",
     "@nestjs/throttler": "^6.2.1",
-    "@prisma/client": "^5.19.1",
+    "@prisma/client": "^5.20.0",
     "bcrypt": "^5.1.1",
     "cache-manager": "^5.7.6",
     "class-transformer": "^0.5.1",

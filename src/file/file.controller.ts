@@ -24,6 +24,7 @@ export class FileController {
     storage: storage,
     limits: {
       fileSize: 1024 * 1024 * 20, // 20MB
+      files: 4,
     }
   }))
   @Post('upload')
