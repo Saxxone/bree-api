@@ -11,5 +11,4 @@ export class AppController {
   checkHealth(): string {
     return 'app is working';
   }
-
 }
