@@ -1,5 +1,7 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { ExceptionsLoggerFilter } from './exceptionsLogger.filter';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -12,6 +14,10 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+
+  app.useGlobalFilters(new ExceptionsLoggerFilter());
+
+  app.useGlobalPipes(new ValidationPipe());
 
   app.use(helmet());
 

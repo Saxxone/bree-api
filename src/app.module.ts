@@ -6,21 +6,28 @@ import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { PostModule } from './post/post.module';
 import { AuthModule } from './auth/auth.module';
-import { APP_GUARD } from '@nestjs/core';
+import { CacheModule } from '@nestjs/cache-manager';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
+import { LoggingInterceptor } from './app.interceptor';
+import { FileModule } from './file/file.module';
+
+
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    CacheModule.register(),
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,
+        ttl: 6000,
         limit: 10,
       },
     ]),
     UserModule,
     PostModule,
     AuthModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [
@@ -28,6 +35,10 @@ import { AuthGuard } from './auth/auth.guard';
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
     },
   ],
 })

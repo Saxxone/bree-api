@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PostService } from './post.service';
-import { Post as PostModel, Prisma} from '@prisma/client';
+import { Post as PostModel} from '@prisma/client';
 
 @Controller('posts')
 export class PostController {
@@ -25,6 +25,7 @@ export class PostController {
 
     return await this.postService.createDraft({
       text,
+      media,
       author: {
         connect: { email: req.user.sub },
       },
@@ -40,6 +41,7 @@ export class PostController {
 
     return await this.postService.createPost({
       text,
+      media,
       author: {
         connect: { email: req.user.sub },
       },
