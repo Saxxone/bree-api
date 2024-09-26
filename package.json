@@ -24,7 +24,7 @@
     "prisma:push": "prisma db push --force",
     "prisma:format": "prisma format",
     "prisma:reset": "prisma migrate reset --force",
-    "prisma:seed": "prisma db seed --preview-feature",
+    "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^10.4.4",
+    "@nestjs/terminus": "^10.2.3",
     "@nestjs/throttler": "^6.2.1",
     "@prisma/client": "^5.20.0",
     "bcrypt": "^5.1.1",

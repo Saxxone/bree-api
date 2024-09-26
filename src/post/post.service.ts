@@ -17,7 +17,7 @@ export class PostService {
     if(fileIds.length) {
      const res = await this.fileService.getFilesUrls(data.media as any)
      data.media = res.map(file => file.url);
-     data.mediaType = res.map(file => file.type);
+     data.mediaTypes = res.map(file => file.type);
     }
 
     const draft = this.prisma.post.create({
@@ -36,14 +36,14 @@ export class PostService {
     if(fileIds.length) {
       const res = await this.fileService.getFilesUrls(data.media as any)
       data.media = res.map(file => file.url);
-      data.mediaType = res.map(file => file.type);
+      data.mediaTypes = res.map(file => file.type);
      }
 
     const post = await this.prisma.post.create({
       data,
     });
 
-    fileIds ?? await this.fileService.markFileAsUploaded(fileIds);
+     if(fileIds.length) await this.fileService.markFileAsUploaded(fileIds);
 
     const p  = this.updatePost({
       where: { id: post.id },

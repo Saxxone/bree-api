@@ -34,7 +34,7 @@ model Post {
   id            String    @id @default(uuid())
   text          String?
   media         String[]
-  mediaType     String[]
+  mediaTypes    String[]
   published     Boolean?  @default(false)
   author        User      @relation(fields: [authorId], references: [id])
   authorId      String
