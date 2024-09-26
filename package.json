@@ -28,6 +28,7 @@
     "prisma:drop": "prisma migrate reset --force && prisma db push --force"
   },
   "dependencies": {
+    "@nestjs/axios": "^3.0.3",
     "@nestjs/cache-manager": "^2.2.2",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.2.3",
@@ -38,6 +39,7 @@
     "@nestjs/terminus": "^10.2.3",
     "@nestjs/throttler": "^6.2.1",
     "@prisma/client": "^5.20.0",
+    "axios": "^1.7.7",
     "bcrypt": "^5.1.1",
     "cache-manager": "^5.7.6",
     "class-transformer": "^0.5.1",

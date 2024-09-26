@@ -12,6 +12,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { LoggingInterceptor } from './app.interceptor';
 import { MulterModule } from '@nestjs/platform-express'; 
 import { FileModule } from './file/file.module';
+import { HealthModule } from './health/health.module';
 
 
 
@@ -32,6 +33,7 @@ import { FileModule } from './file/file.module';
     PostModule,
     AuthModule,
     FileModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
