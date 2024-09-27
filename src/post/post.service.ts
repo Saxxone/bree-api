@@ -8,53 +8,51 @@ export class PostService {
   constructor(
     private prisma: PrismaService,
     private fileService: FileService,
-    ) {}
+  ) {}
 
   async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
+    const fileIds = data.media as string[];
 
-    const fileIds =  data.media as string[];
-
-    if(fileIds.length) {
-     const res = await this.fileService.getFilesUrls(data.media as any)
-     data.media = res.map(file => file.url);
-     data.mediaTypes = res.map(file => file.type);
+    if (fileIds.length > 0) {
+      const res = await this.fileService.getFilesUrls(data.media as any);
+      data.media = res.map((file) => file.url);
+      data.mediaTypes = res.map((file) => file.type);
     }
 
     const draft = this.prisma.post.create({
       data,
     });
 
-    fileIds ?? await this.fileService.markFileAsUploaded(fileIds);
+    fileIds ?? (await this.fileService.markFileAsUploaded(fileIds));
 
     return draft;
   }
 
   async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+    const fileIds = data.media as string[];
 
-    const fileIds =  data.media as string[];
-
-    if(fileIds.length) {
-      const res = await this.fileService.getFilesUrls(data.media as any)
-      data.media = res.map(file => file.url);
-      data.mediaTypes = res.map(file => file.type);
-     }
+    if (fileIds.length > 0) {
+      const res = await this.fileService.getFilesUrls(data.media as any);
+      data.media = res.map((file) => file.url);
+      data.mediaTypes = res.map((file) => file.type);
+    }
 
     const post = await this.prisma.post.create({
       data,
     });
 
-     if(fileIds.length) await this.fileService.markFileAsUploaded(fileIds);
+    if (fileIds.length > 0) await this.fileService.markFileAsUploaded(fileIds);
 
-    const p  = this.updatePost({
+    const p = this.updatePost({
       where: { id: post.id },
-      data: { 
+      data: {
         published: true,
-       },
+      },
     });
 
-    if(post.parentId) this.incrementParentPostCommentCount(post.parentId);
+    if (post.parentId) this.incrementParentPostCommentCount(post.parentId);
 
-    return p
+    return p;
   }
 
   async findParentPost(postId: string): Promise<Post | null> {
