@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PostService } from './post.service';
-import { Post as PostModel} from '@prisma/client';
+import { Post as PostModel } from '@prisma/client';
 
 @Controller('posts')
 export class PostController {
@@ -114,13 +114,31 @@ export class PostController {
   }
 
   @Post('feed')
-  async getPublishedPosts(@Param() params: any,
-  @Query('skip') skip?: number,
-  @Query('take') take?: number,
-  @Query('cursor') cursor?: string,
+  async getPublishedPosts(
+    @Param() params: any,
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+    @Query('cursor') cursor?: string,
   ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { published: true },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip: Number(skip),
+      take: Number(take),
+    });
+  }
+
+  @Get('user/:id/posts')
+  async getUserPosts(
+    @Param() params: any,
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+    @Query('cursor') cursor?: string,
+  ): Promise<PostModel[]> {
+    return await this.postService.getMultiplePosts({
+      where: { published: true, author: { id: params.id } },
       orderBy: {
         createdAt: 'desc',
       },
