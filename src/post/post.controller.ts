@@ -147,13 +147,21 @@ export class PostController {
     });
   }
 
-  @Get('filtered-posts/:searchString')
-  async getFilteredPosts(
-    @Param('searchString') searchString: string,
-  ): Promise<PostModel[]> {
+  @Post('/search')
+  async getFilteredPosts(@Query('q') q?: string): Promise<PostModel[]> {
+    const cleanedQuery = q.trim().replace(/[^a-zA-Z0-9\s]/g, ' ');
+
+    const query =
+      cleanedQuery.split(/[ \+]/).length > 1
+        ? cleanedQuery.split(' ').join(' | ')
+        : cleanedQuery;
+
     return await this.postService.getMultiplePosts({
       where: {
-        text: { contains: searchString },
+        published: true,
+        text: {
+          search: query,
+        },
       },
     });
   }
