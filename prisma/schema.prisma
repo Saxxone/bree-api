@@ -76,4 +76,5 @@ enum Status {
   APPROVED
   REJECTED
   UPLOADED
+  DELETED
 }

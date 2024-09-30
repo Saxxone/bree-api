@@ -13,9 +13,11 @@ import { LoggingInterceptor } from './app.interceptor';
 import { MulterModule } from '@nestjs/platform-express';
 import { FileModule } from './file/file.module';
 import { HealthModule } from './health/health.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot(),
     CacheModule.register(),
     MulterModule.register({
