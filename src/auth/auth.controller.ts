@@ -16,8 +16,8 @@ import { UserService } from 'src/user/user.service';
 @Controller('auth')
 export class AuthController {
   constructor(
-    private userService: UserService,
-    private authService: AuthService,
+    private readonly userService: UserService,
+    private readonly authService: AuthService,
   ) {}
 
   @HttpCode(HttpStatus.OK)

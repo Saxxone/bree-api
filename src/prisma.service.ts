@@ -6,4 +6,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   async onModuleInit() {
     await this.$connect();
   }
+
+  prisma = new PrismaClient({
+    omit: {
+      user: {
+        password: true,
+      },
+    },
+  });
 }

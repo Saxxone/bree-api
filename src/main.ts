@@ -17,15 +17,17 @@ async function bootstrap() {
 
   app.useGlobalFilters(new ExceptionsLoggerFilter());
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      disableErrorMessages: true,
-      transform: true,
-      whitelist: true,
-      enableDebugMessages: true, //only use in development
-      stopAtFirstError: true,
-    }),
-  );
+
+  //TODO enable gaurds and do not require auth for public routes
+  // app.useGlobalPipes(
+  //   new ValidationPipe({
+  //     disableErrorMessages: true,
+  //     transform: true,
+  //     whitelist: true,
+  //     enableDebugMessages: true, //only use in development
+  //     stopAtFirstError: true,
+  //   }),
+  // );
 
   app.use(helmet());
 

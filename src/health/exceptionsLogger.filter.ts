@@ -21,24 +21,33 @@ export class ExceptionsLoggerFilter implements ExceptionFilter {
       ${response.statusCode}
       
       ${request.method} ${request.url}
-      ${JSON.stringify(request.body)}
+      ${JSON.stringify(this.sanitizeRequestBody(request.body))}
       ${exception.message}
       ${exception.stack}
 
       --------------------------------------------------
     `;
 
-    fs.appendFile('error.log', logMessage, (err) => {
+    fs.appendFile('./error.log', logMessage, (err) => {
       if (err) {
         console.error('Error writing to log file:', err);
       }
     });
 
     response.status(status).json({
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: request.url,
+      status: status,
       message: exception.message,
     });
+  }
+
+  private sanitizeRequestBody(body: any): any {
+    if (body && typeof body === 'object') {
+      const sanitizedBody = { ...body };
+      if (sanitizedBody.password) {
+        sanitizedBody.password = '***REDACTED***';
+      }
+      return sanitizedBody;
+    }
+    return body;
   }
 }
