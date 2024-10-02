@@ -1,10 +1,14 @@
-import { User, User as UserModel } from '@prisma/client';
+import { IsString, Allow } from 'class-validator';
 
-export class PostDto {
-  id: number;
-  date: Date;
-  title: string;
+export class CreatePostDto {
+  @IsString()
   text: string;
-  author: User;
-  img?: string;
+
+  @Allow()
+  @IsString({ each: true })
+  media?: string[];
+
+  @Allow()
+  @IsString()
+  parentId?: string;
 }

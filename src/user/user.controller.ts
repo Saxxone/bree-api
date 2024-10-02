@@ -10,6 +10,7 @@ import {
 import { UserService } from './user.service';
 import { User, User as UserModel } from '@prisma/client';
 import { Public } from 'src/auth/auth.guard';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Controller('user')
 export class UserController {
@@ -19,7 +20,7 @@ export class UserController {
   @Post('register')
   async signupUser(
     @Body()
-    userData: UserModel,
+    userData: CreateUserDto,
   ): Promise<UserModel> {
     return this.userService.createUser(userData);
   }

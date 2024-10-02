@@ -1,11 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findUser(usernameOrEmail: string): Promise<User | null> {
     return this.prisma.user.findFirst({
@@ -32,11 +34,11 @@ export class UserService {
     });
   }
 
-  async createUser(data: Prisma.UserCreateInput): Promise<User> {
-    data = {
-      ...data,
-      img: data.img ?? 'https://randomuser.me/api/portraits/men/90.jpg',
-      password: await bcrypt.hash(data.password, 10),
+  async createUser(d: CreateUserDto): Promise<User> {
+    const data = {
+      ...d,
+      img: d.img ?? 'https://randomuser.me/api/portraits/men/90.jpg',
+      password: await bcrypt.hash(d.password, 10),
     };
 
     return this.prisma.user.create({
@@ -46,7 +48,7 @@ export class UserService {
 
   async updateUser(params: {
     where: Prisma.UserWhereUniqueInput;
-    data: Prisma.UserUpdateInput;
+    data: UpdateUserDto;
   }): Promise<User> {
     const { where, data } = params;
     return this.prisma.user.update({
