@@ -14,6 +14,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { FileModule } from './file/file.module';
 import { HealthModule } from './health/health.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     FileModule,
     HealthModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [
