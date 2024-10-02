@@ -9,8 +9,8 @@ import * as fs from 'fs/promises';
 @Injectable()
 export class FileService {
   constructor(
-    private userService: UserService,
-    private prisma: PrismaService,
+    private readonly userService: UserService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private readonly logger = new Logger();

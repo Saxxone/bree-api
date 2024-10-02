@@ -15,10 +15,13 @@ import { FileModule } from './file/file.module';
 import { HealthModule } from './health/health.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationModule } from './notification/notification.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     ConfigModule.forRoot(),
     CacheModule.register(),
     MulterModule.register({
@@ -36,6 +39,7 @@ import { NotificationModule } from './notification/notification.module';
     FileModule,
     HealthModule,
     NotificationModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [
