@@ -3,12 +3,25 @@ import { CreateChatDto } from './dto/create-chat.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
+import { PrismaService } from '../prisma.service';
+import { Chat, Status } from '@prisma/client';
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly eventEmitter: EventEmitter2) {}
+  constructor(
+    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  create<T>(createChatDto: CreateChatDto<T>) {
+  async create<T>(createChatDto: CreateChatDto<T>): Promise<Chat> {
+    const chat = await this.prisma.chat.create({
+      data: {
+        ...createChatDto,
+        status: Status.SENT,
+        
+      },
+    });
+
     this.eventEmitter.emit(
       'chat.created',
       new ChatCreatedEvent<T>({
@@ -18,7 +31,7 @@ export class ChatService {
       }),
     );
 
-    return 'This action adds a new chat';
+    return chat;
   }
 
   findAll() {
@@ -36,4 +49,6 @@ export class ChatService {
   remove(id: number) {
     return `This action removes a #${id} chat`;
   }
+
+  emitEvent() {}
 }

@@ -6,13 +6,14 @@ import {
   Patch,
   Param,
   Delete,
+  Request,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
-import { User } from '@prisma/client';
+import { User, Chat as ChatModel } from '@prisma/client';
 
 @Controller('chat')
 export class ChatController {
@@ -26,6 +27,14 @@ export class ChatController {
   @Post()
   create(@Body() createChatDto: CreateChatDto<User>) {
     return this.chatService.create<User>(createChatDto);
+  }
+
+  @Post('create-chat')
+  async createChat(
+    @Request() req: any,
+    @Body() chatData: CreateChatDto<User>,
+  ): Promise<string> {
+    return await this.chatService.create(chatData);
   }
 
   @Get()

@@ -6,8 +6,8 @@ import { FileService } from 'src/file/file.service';
 @Injectable()
 export class PostService {
   constructor(
-    private prisma: PrismaService,
-    private fileService: FileService,
+    private readonly prisma: PrismaService,
+    private readonly fileService: FileService,
   ) {}
 
   async createDraft(data: Prisma.PostCreateInput): Promise<Post> {

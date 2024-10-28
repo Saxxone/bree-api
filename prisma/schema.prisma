@@ -31,6 +31,9 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
+  recipient       Chat[]    @relation("chatRecipient")
+  sender          Chat[]    @relation("chatSender")
+  deletedBy       Chat[]    @relation("chatDeletedBy")
 }
 
 model Post {
@@ -71,10 +74,33 @@ model File {
   deletedAt    DateTime?
 }
 
+model Chat {
+  id              String    @id @default(uuid())
+  to              User      @relation("chatRecipient", fields: [toUserId], references: [id])
+  from            User      @relation("chatSender", fields: [fromUserId], references: [id])
+  text            String?
+  media           String?
+  mediaType       String[]
+  read            Boolean   @default(false)
+  deletedBy       User?     @relation("chatDeletedBy", fields: [deletedByUserId], references: [id])
+  deletedByUserId String?
+  deletedByMe     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  toUserId        String
+  fromUserId      String
+  status          Status    @default(PENDING)
+  userId          String?
+}
+
 enum Status {
   PENDING
   APPROVED
   REJECTED
   UPLOADED
   DELETED
+  SENT
+  DELIVERED
+  SEEN
 }
