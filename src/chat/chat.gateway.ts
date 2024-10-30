@@ -8,12 +8,31 @@ import {
   Delete,
   Request,
 } from '@nestjs/common';
-import { ChatService } from './chat.service';
+import {
+  WebSocketGateway,
+  SubscribeMessage,
+  MessageBody,
+} from '@nestjs/websockets';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
-import { User, Chat as ChatModel } from '@prisma/client';
+import { Chat as ChatModel } from '@prisma/client';
+
+
+
+@WebSocketGateway()
+export class ChatGateway {
+  constructor(private readonly chatService: ChatService) {}
+
+  @SubscribeMessage('create')
+  async createChat(
+    @Request() req: any,
+    @MessageBody() chatData: CreateChatDto,
+  ): Promise<ChatModel> {
+    return await this.chatService.create(chatData, req.user.sub as string);
+  }
+}
 
 @Controller('chats')
 export class ChatController {
@@ -24,16 +43,8 @@ export class ChatController {
     // handle and process "ChatCreatedEvent" event
   }
 
-  @Post('create')
-  async createChat(
-    @Request() req: any,
-    @Body() chatData: CreateChatDto,
-  ): Promise<ChatModel> {
-    return await this.chatService.create(chatData, req.user.sub as string);
-  }
-
   @Get('view/:id')
-  findAll(@Request() req: any, @Param('id') id: string) {
+  findAll(@Request() req: any, @Param('id') id: 'uuid') {
     return this.chatService.findAll(id, req.user.sub);
   }
 

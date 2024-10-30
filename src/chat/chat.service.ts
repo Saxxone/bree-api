@@ -48,6 +48,11 @@ export class ChatService {
     return chat;
   }
 
+
+  async createRoom(){
+
+  }
+
   async findAll(to: 'uuid', from: 'email') {
     return await this.prisma.chat.findMany({
       where: {
