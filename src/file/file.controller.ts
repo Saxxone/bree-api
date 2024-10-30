@@ -57,16 +57,16 @@ export class FileController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.fileService.findOne(+id);
+    return this.fileService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateFileDto: UpdateFileDto) {
-    return this.fileService.update(+id, updateFileDto);
+    return this.fileService.update(id, updateFileDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.fileService.remove(+id);
+    return this.fileService.remove(id);
   }
 }

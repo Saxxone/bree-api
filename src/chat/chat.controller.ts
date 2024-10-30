@@ -15,31 +15,26 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
 import { User, Chat as ChatModel } from '@prisma/client';
 
-@Controller('chat')
+@Controller('chats')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @OnEvent('chat.created')
-  handleOrderCreatedEvent(payload: ChatCreatedEvent<User>) {
+  handleOrderCreatedEvent(payload: ChatCreatedEvent) {
     // handle and process "ChatCreatedEvent" event
   }
 
-  @Post()
-  create(@Body() createChatDto: CreateChatDto<User>) {
-    return this.chatService.create<User>(createChatDto);
-  }
-
-  @Post('create-chat')
+  @Post('create')
   async createChat(
     @Request() req: any,
-    @Body() chatData: CreateChatDto<User>,
-  ): Promise<string> {
-    return await this.chatService.create(chatData);
+    @Body() chatData: CreateChatDto,
+  ): Promise<ChatModel> {
+    return await this.chatService.create(chatData, req.user.sub as string);
   }
 
-  @Get()
-  findAll() {
-    return this.chatService.findAll();
+  @Get('view/:id')
+  findAll(@Request() req: any, @Param('id') id: string) {
+    return this.chatService.findAll(id, req.user.sub);
   }
 
   @Get(':id')

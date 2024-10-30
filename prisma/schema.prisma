@@ -34,6 +34,8 @@ model User {
   recipient       Chat[]    @relation("chatRecipient")
   sender          Chat[]    @relation("chatSender")
   deletedBy       Chat[]    @relation("chatDeletedBy")
+  Room            Room?     @relation(fields: [roomId], references: [id])
+  roomId          String?
 }
 
 model Post {
@@ -92,6 +94,16 @@ model Chat {
   fromUserId      String
   status          Status    @default(PENDING)
   userId          String?
+  Room            Room?     @relation(fields: [roomId], references: [id])
+  roomId          String?
+}
+
+model Room {
+  id           String   @id @default(uuid())
+  chats        Chat[]
+  participants User[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 enum Status {

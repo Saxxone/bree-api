@@ -1,5 +1,7 @@
-export class CreateChatDto<T> {
-  name: string;
-  description: string;
-  actor: T;
+export class CreateChatDto {
+  text: string;
+  media?: string;
+  mediaType?: string;
+  toUserId: string;
+  fromUserId: string;
 }

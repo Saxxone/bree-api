@@ -17,7 +17,7 @@ export class FileService {
 
   @Cron(CronExpression.EVERY_DAY_AT_11PM)
   async handleCron() {
-    this.logger.debug('Called every day at 11pm');
+    this.logger.log('remove orphaned files every day at 11pm');
 
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setDate(twentyFourHoursAgo.getDate() - 1);
@@ -118,15 +118,15 @@ export class FileService {
     return `This action returns all file`;
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return `This action returns a #${id} file`;
   }
 
-  update(id: number, updateFileDto: UpdateFileDto) {
+  update(id: string, updateFileDto: UpdateFileDto) {
     return `This action updates a #${id} file`;
   }
 
-  remove(id: number) {
+  remove(id: string) {
     return `This action removes a #${id} file`;
   }
 }

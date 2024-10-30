@@ -13,29 +13,58 @@ export class ChatService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async create<T>(createChatDto: CreateChatDto<T>): Promise<Chat> {
+  async create(newChat: CreateChatDto, from: string): Promise<Chat> {
+    const { text, media, mediaType } = newChat;
+    console.log(from, newChat);
+
     const chat = await this.prisma.chat.create({
       data: {
-        ...createChatDto,
+        ...(text && { text }),
+        ...(media && { media }),
+        ...(mediaType && { mediaType: [mediaType] }),
         status: Status.SENT,
-        
+        to: {
+          connect: {
+            id: newChat.toUserId,
+          },
+        },
+        from: {
+          connect: {
+            email: from,
+          },
+        },
       },
     });
 
     this.eventEmitter.emit(
       'chat.created',
-      new ChatCreatedEvent<T>({
-        name: createChatDto.name,
-        description: createChatDto.description,
-        actor: createChatDto.actor,
+      new ChatCreatedEvent({
+        name: newChat.text,
+        description: newChat.text,
+        fromUserId: newChat.fromUserId,
       }),
     );
 
     return chat;
   }
 
-  findAll() {
-    return `This action returns all chat`;
+  async findAll(to: 'uuid', from: 'email') {
+    return await this.prisma.chat.findMany({
+      where: {
+        OR: [
+          {
+            from: { email: from },
+            toUserId: to,
+          },
+          {
+            fromUserId: to,
+            to: {
+              email: from,
+            },
+          },
+        ],
+      },
+    });
   }
 
   findOne(id: number) {
@@ -50,5 +79,7 @@ export class ChatService {
     return `This action removes a #${id} chat`;
   }
 
-  emitEvent() {}
+  emitEvent() {
+    // emit event
+  }
 }
