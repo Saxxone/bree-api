@@ -22,8 +22,6 @@ export class ChatService {
     const sender = await this.userService.findUser(newChat.fromUserId);
     const receiver = await this.userService.findUser(newChat.toUserId);
 
-    console.log(sender, receiver);
-
     const room = newChat.roomId
       ? await this.roomService.findOne(newChat.roomId)
       : await this.roomService.create(sender, receiver);
@@ -52,14 +50,14 @@ export class ChatService {
       },
     });
 
-    // this.eventEmitter.emit(
-    //   'chat.created',
-    //   new ChatCreatedEvent({
-    //     name: newChat.text,
-    //     description: newChat.text,
-    //     fromUserId: newChat.fromUserId,
-    //   }),
-    // );
+    this.eventEmitter.emit(
+      'chat.created',
+      new ChatCreatedEvent({
+        name: newChat.text,
+        description: newChat.text,
+        fromUserId: newChat.fromUserId,
+      }),
+    );
     return chat;
   }
 
