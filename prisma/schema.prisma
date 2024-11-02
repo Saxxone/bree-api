@@ -94,7 +94,7 @@ model Chat {
   fromUserId      String
   status          Status    @default(PENDING)
   userId          String?
-  Room            Room?     @relation(fields: [roomId], references: [id])
+  room            Room?     @relation(fields: [roomId], references: [id])
   roomId          String?
 }
 

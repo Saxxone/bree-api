@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -10,11 +10,13 @@ export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findUser(usernameOrEmail: string): Promise<User | null> {
-    return this.prisma.user.findFirst({
+    const user = await this.prisma.user.findFirst({
       where: {
         OR: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
       },
     });
+    if (!user) throw NotFoundException;
+    return user;
   }
 
   async getMultipleUsers(params: {

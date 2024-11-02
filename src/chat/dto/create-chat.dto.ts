@@ -4,4 +4,5 @@ export class CreateChatDto {
   mediaType?: string;
   toUserId: string;
   fromUserId: string;
+  roomId?: string;
 }

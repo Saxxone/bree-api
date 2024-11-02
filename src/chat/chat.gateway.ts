@@ -10,27 +10,45 @@ import {
 } from '@nestjs/common';
 import {
   WebSocketGateway,
+  WebSocketServer,
   SubscribeMessage,
   MessageBody,
 } from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
 import { Chat as ChatModel } from '@prisma/client';
+import { ChatService } from './chat.service';
+import { ui_base_url } from 'utils';
 
-
-
-@WebSocketGateway()
+@WebSocketGateway({
+  cors: {
+    namespace: 'chat',
+    origin: '*',
+    transports: ['websocket'],
+  },
+})
 export class ChatGateway {
   constructor(private readonly chatService: ChatService) {}
 
-  @SubscribeMessage('create')
-  async createChat(
-    @Request() req: any,
-    @MessageBody() chatData: CreateChatDto,
-  ): Promise<ChatModel> {
-    return await this.chatService.create(chatData, req.user.sub as string);
+  @WebSocketServer()
+  server: Server;
+
+  // @SubscribeMessage('chat')
+  // handleEvent(client: Socket, data: string): string {
+  //   console.log(data);
+  //   return data;
+  // }
+
+  @SubscribeMessage('chat')
+  async createChat(@MessageBody() chatData: CreateChatDto) {
+    console.log(chatData);
+    return await this.chatService.create(
+      chatData,
+      'saxxone17@gmail.com' as string,
+    );
   }
 }
 

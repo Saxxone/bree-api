@@ -5,17 +5,25 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
 import { PrismaService } from '../prisma.service';
 import { Chat, Status } from '@prisma/client';
+import { UserService } from 'src/user/user.service';
+import { RoomService } from 'src/room/room.service';
 
 @Injectable()
 export class ChatService {
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
+    private readonly userService: UserService,
+    private readonly roomService: RoomService,
   ) {}
 
   async create(newChat: CreateChatDto, from: string): Promise<Chat> {
     const { text, media, mediaType } = newChat;
-    console.log(from, newChat);
+    const sender = await this.userService.findUser(from);
+    const receiver = await this.userService.findUser(newChat.toUserId);
+    const room = newChat.roomId
+      ? await this.roomService.findOne(newChat.roomId)
+      : await this.roomService.create(sender, receiver);
 
     const chat = await this.prisma.chat.create({
       data: {
@@ -33,6 +41,11 @@ export class ChatService {
             email: from,
           },
         },
+        room: {
+          connect: {
+            id: room.id,
+          },
+        },
       },
     });
 
@@ -48,10 +61,7 @@ export class ChatService {
     return chat;
   }
 
-
-  async createRoom(){
-
-  }
+  async createRoom() {}
 
   async findAll(to: 'uuid', from: 'email') {
     return await this.prisma.chat.findMany({
