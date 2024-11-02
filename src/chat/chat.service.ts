@@ -17,10 +17,13 @@ export class ChatService {
     private readonly roomService: RoomService,
   ) {}
 
-  async create(newChat: CreateChatDto, from: string): Promise<Chat> {
+  async create(newChat: CreateChatDto): Promise<Chat> {
     const { text, media, mediaType } = newChat;
-    const sender = await this.userService.findUser(from);
+    const sender = await this.userService.findUser(newChat.fromUserId);
     const receiver = await this.userService.findUser(newChat.toUserId);
+
+    console.log(sender, receiver);
+
     const room = newChat.roomId
       ? await this.roomService.findOne(newChat.roomId)
       : await this.roomService.create(sender, receiver);
@@ -38,7 +41,7 @@ export class ChatService {
         },
         from: {
           connect: {
-            email: from,
+            id: newChat.fromUserId,
           },
         },
         room: {
@@ -49,19 +52,16 @@ export class ChatService {
       },
     });
 
-    this.eventEmitter.emit(
-      'chat.created',
-      new ChatCreatedEvent({
-        name: newChat.text,
-        description: newChat.text,
-        fromUserId: newChat.fromUserId,
-      }),
-    );
-
+    // this.eventEmitter.emit(
+    //   'chat.created',
+    //   new ChatCreatedEvent({
+    //     name: newChat.text,
+    //     description: newChat.text,
+    //     fromUserId: newChat.fromUserId,
+    //   }),
+    // );
     return chat;
   }
-
-  async createRoom() {}
 
   async findAll(to: 'uuid', from: 'email') {
     return await this.prisma.chat.findMany({

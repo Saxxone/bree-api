@@ -93,7 +93,6 @@ model Chat {
   toUserId        String
   fromUserId      String
   status          Status    @default(PENDING)
-  userId          String?
   room            Room?     @relation(fields: [roomId], references: [id])
   roomId          String?
 }

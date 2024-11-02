@@ -9,8 +9,6 @@ export class RoomService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(sender: User, receiver: User): Promise<Room> {
-    console.log(sender, receiver);
-    //
     return this.prisma.room.create({
       data: {
         participants: {
@@ -36,17 +34,38 @@ export class RoomService {
           },
         },
       },
+      include: {
+        participants: true,
+        chats: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
   }
 
-  findOne(id: string): Promise<Room> {
-    return (
-      this.prisma.room.findUnique({
-        where: {
-          id,
+  findChatsInRoom(roomId: string) {
+    return this.prisma.chat.findMany({
+      where: {
+        roomId,
+      },
+    });
+  }
+
+  async findOne(id: string): Promise<Room> {
+    const room = await (this.prisma.room.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        participants: true,
+        chats: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
         },
-      }) ?? null
-    );
+      },
+    }) ?? null);
+    return room;
   }
 
   update(id: number, updateRoomDto: UpdateRoomDto) {
