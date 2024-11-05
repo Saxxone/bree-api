@@ -95,6 +95,39 @@ export class RoomService {
     return room;
   }
 
+  async findRoomByParticipantsOrCreate(
+    user1Id: string,
+    user2Id: string,
+  ): Promise<Room> {
+    const user1 = await this.userService.findUser(user1Id);
+    const user2 = await this.userService.findUser(user2Id);
+
+    if (!user1 || !user2) {
+      throw new NotFoundException('User not found');
+    }
+
+    const existingRoom = await this.prisma.room.findFirst({
+      where: {
+        participants: {
+          every: { id: { in: [user1Id, user2Id] } },
+        },
+      },
+      include: {
+        participants: true,
+        chats: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (existingRoom) {
+      return existingRoom;
+    }
+
+    return this.create(user1, user2);
+  }
+
   update(id: number, updateRoomDto: UpdateRoomDto) {
     return `This action updates a #${id} room`;
   }
