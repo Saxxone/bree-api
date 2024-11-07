@@ -85,7 +85,10 @@ export class FileService {
     return await Promise.all(
       fileIds.map(async (fileId) => {
         const file = await this.prisma.file.findUnique({
-          where: { id: fileId, status: Status.UPLOADED },
+          where: {
+            id: fileId,
+            status: { in: [Status.PENDING, Status.UPLOADED] },
+          },
         });
 
         if (!file) {
