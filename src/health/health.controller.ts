@@ -24,7 +24,7 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.http.pingCheck('bray-api', 'http://localhost:3000/api/hello'),
+      () => this.http.pingCheck('bree-api', 'http://localhost:3000/api/hello'),
     ]);
   }
 
@@ -35,7 +35,7 @@ export class HealthController {
     return this.health.check([
       () =>
         this.http.responseCheck(
-          'bray-app',
+          'bree-web',
           'http://localhost:4000/login',
           (res) => res.status === 200,
         ),
@@ -47,7 +47,7 @@ export class HealthController {
   @HealthCheck()
   databaseCheck() {
     return this.health.check([
-      () => this.http.pingCheck('bray-db', 'database'),
+      () => this.http.pingCheck('bree-db', 'database'),
     ]);
   }
 

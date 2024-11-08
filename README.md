@@ -1,4 +1,4 @@
-# Bray Social
+# Bree API
 
 The fun social app 
 
