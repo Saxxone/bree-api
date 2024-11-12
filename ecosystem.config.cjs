@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'bree-api',
-      script: 'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mydb?schema=public" npm run start',
+      script: 'npm run start',
       port: 3000,
       cwd: './',
 
