@@ -3,10 +3,13 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
 import helmet from 'helmet';
-import { ui_base_url } from 'utils';
+import { ui_base_url, api_base_url } from 'utils';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  console.log(ui_base_url);
+  console.log(api_base_url);
 
   app.enableCors({
     origin: ui_base_url,
