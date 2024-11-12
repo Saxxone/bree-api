@@ -31,10 +31,8 @@ jobs:
         key: ${{ secrets.VPS_PRIVATE_KEY }}
         port: 22
 
-    - name: Enter app folder
+    - name: Deploy app
       run: cd ~/bree-api
-
-    
     - run: npm ci
     - run: npm run build --if-present
     - run: npx prisma migrate dev
