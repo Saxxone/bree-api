@@ -5,9 +5,10 @@ import {
   HealthCheck,
   PrismaHealthIndicator,
   DiskHealthIndicator,
-  MemoryHealthIndicator
+  MemoryHealthIndicator,
 } from '@nestjs/terminus';
 import { Public } from 'src/auth/auth.guard';
+import { api_base_url, ui_base_url } from 'utils';
 
 @Controller('health')
 export class HealthController {
@@ -19,12 +20,16 @@ export class HealthController {
     private readonly memory: MemoryHealthIndicator,
   ) {}
 
+  url = api_base_url;
+  ui_url = ui_base_url;
+
+
   @Public()
   @Get('api')
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.http.pingCheck('bree-api', 'http://localhost:3000/api/hello'),
+      () => this.http.pingCheck('bree-api', this.url + '/hello'),
     ]);
   }
 
@@ -36,7 +41,7 @@ export class HealthController {
       () =>
         this.http.responseCheck(
           'bree-web',
-          'http://localhost:4000/login',
+          this.ui_url + '/login',
           (res) => res.status === 200,
         ),
     ]);
