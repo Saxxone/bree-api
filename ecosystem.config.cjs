@@ -2,16 +2,12 @@ module.exports = {
   apps: [
     {
       name: 'bree-api',
-      script: 'npm start',
+      script: 'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mydb?schema=public" npm run start',
       port: 3000,
       cwd: './',
 
       env: {
         NODE_ENV: 'production',
-        DATABASE_URL:
-          'postgresql://postgres:postgres@localhost:5432/mydb?schema=public',
-        DATABASE_USER: 'bree',
-        DATABASE_PASSWORD: 'bree-api',
       },
 
       // Process management
