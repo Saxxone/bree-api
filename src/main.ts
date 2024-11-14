@@ -5,6 +5,7 @@ import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
 import helmet from 'helmet';
 import { ui_base_url, api_base_url } from 'utils';
 
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
