@@ -56,6 +56,8 @@ export class FileService {
   ): Promise<string[]> {
     const user = await this.userService.findUser(email);
     const savedFiles: string[] = [];
+    const media_base_url = process.env.FILE_BASE_URL;
+
 
     for (const file of files) {
       const savedFile = await this.prisma.file.create({
@@ -63,7 +65,7 @@ export class FileService {
           filename: file.filename,
           originalname: file.originalname,
           path: file.path,
-          url: file.path,
+          url: `${media_base_url}media/${file.filename}`,
           mimetype: file.mimetype,
           size: file.size,
           status: Status.PENDING,
