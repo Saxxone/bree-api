@@ -76,7 +76,6 @@ export class FileController {
     @UploadedFiles() files: Array<Express.Multer.File>,
     @Request() req: any,
   ) {
-    console.log(destination);
     const compressedFiles = await compressFiles(files);
     return await this.fileService.create(compressedFiles, req.user.sub);
   }
