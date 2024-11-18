@@ -2,12 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PostService } from './post.service';
 import { PrismaService } from '../prisma.service';
 
-
 describe('PostService', () => {
   let postService: PostService;
   let prismaService: PrismaService;
-  
-  
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [PostService, PrismaService],

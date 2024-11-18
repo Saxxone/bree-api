@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateFedUserDto, CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
@@ -42,15 +42,21 @@ export class UserService {
   }
 
   async createUser(d: CreateUserDto): Promise<User> {
+    const default_img = process.env.DEFAULT_PROFILE_IMG;
+
     const data = {
       ...d,
-      img: d.img ?? 'https://randomuser.me/api/portraits/men/90.jpg',
+      img: d.img ?? default_img,
       password: await bcrypt.hash(d.password, 10),
     };
 
     return this.prisma.user.create({
       data,
     });
+  }
+
+  async createFedUser(data: CreateFedUserDto): Promise<User> {
+    return this.prisma.user.create({ data });
   }
 
   async updateUser(params: {

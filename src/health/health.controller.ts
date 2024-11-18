@@ -23,7 +23,6 @@ export class HealthController {
   url = api_base_url;
   ui_url = ui_base_url;
 
-
   @Public()
   @Get('api')
   @HealthCheck()

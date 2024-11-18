@@ -20,9 +20,7 @@ export class NotificationController {
     name: 'notifications',
     timeZone: 'Europe/London',
   })
-  triggerNotifications() {
-    
-  }
+  triggerNotifications() {}
 
   @Post()
   create(@Body() createNotificationDto: CreateNotificationDto) {

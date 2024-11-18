@@ -58,14 +58,13 @@ export class FileService {
     const savedFiles: string[] = [];
     const media_base_url = process.env.FILE_BASE_URL;
 
-
     for (const file of files) {
       const savedFile = await this.prisma.file.create({
         data: {
           filename: file.filename,
           originalname: file.originalname,
           path: file.path,
-          url: `${media_base_url}media/${file.filename}`,
+          url: `${media_base_url}${file.filename}`,
           mimetype: file.mimetype,
           size: file.size,
           status: Status.PENDING,

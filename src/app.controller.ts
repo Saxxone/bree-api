@@ -6,8 +6,8 @@ import { Public } from './auth/auth.guard';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-@Public()
-@Get('hello')
+  @Public()
+  @Get('hello')
   checkHealth(): string {
     return 'app is working';
   }

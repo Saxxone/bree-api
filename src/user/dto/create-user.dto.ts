@@ -35,3 +35,28 @@ export class CreateUserDto {
   @IsString()
   banner?: string;
 }
+
+export class CreateFedUserDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  username: string;
+
+  @Allow()
+  bio?: string;
+
+  @Allow()
+  @IsString()
+  img: string;
+
+  @Allow()
+  @IsString()
+  banner?: string;
+}
