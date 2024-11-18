@@ -18,7 +18,7 @@ export class ExceptionsLoggerFilter implements ExceptionFilter {
     const logMessage = `
       --------------------------------------------------
       ${new Date().toISOString()}
-      ${response.statusCode}
+      ${response.status}
       
       ${request.method} ${request.url}
       ${JSON.stringify(this.sanitizeRequestBody(request.body))}
