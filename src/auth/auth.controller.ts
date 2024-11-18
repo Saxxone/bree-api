@@ -18,7 +18,6 @@ export class AuthController {
   constructor(
     private readonly userService: UserService,
     private readonly authService: AuthService,
-    private readonly jwtService: JwtService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
