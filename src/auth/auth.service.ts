@@ -14,12 +14,14 @@ import * as https from 'https';
 import { join } from 'path';
 import * as fs from 'fs';
 import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
@@ -100,7 +102,11 @@ export class AuthService {
   async signUpGoogle(token: string): Promise<Partial<AuthUser>> {
     const payload: GoogleAuthUser = await this.jwtService.decode(token);
 
-    const user = await this.userService.findUser(payload.email);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: payload.email,
+      },
+    });
 
     const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
 
