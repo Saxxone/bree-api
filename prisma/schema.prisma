@@ -23,7 +23,7 @@ model User {
   verified        Boolean   @default(false)
   banner          String?
   img             String
-  password        String
+  password        String?
   posts           Post[]
   files           File[]
   likedPosts      Post[]    @relation("likedPosts")

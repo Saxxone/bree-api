@@ -3,7 +3,6 @@ import { PostController } from './post.controller';
 import { PostService } from './post.service';
 import { PrismaService } from '../prisma.service';
 
-
 describe('PostController', () => {
   let postController: PostController;
   let prismaService: PrismaService;
@@ -11,7 +10,7 @@ describe('PostController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PostController],
-      providers: [PostService , PrismaService],
+      providers: [PostService, PrismaService],
     }).compile();
 
     postController = module.get<PostController>(PostController);
