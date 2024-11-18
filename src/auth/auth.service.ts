@@ -100,18 +100,19 @@ export class AuthService {
   async signUpGoogle(token: string): Promise<Partial<AuthUser>> {
     const payload: GoogleAuthUser = await this.jwtService.decode(token);
 
-    const user = await this.userService.findUser(payload.email);
-
-    const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
-
-    if (user) {
-      throw new NotAcceptableException();
-    }
-
-    if (client_id !== payload.aud) {
-      throw new UnauthorizedException();
-    }
     try {
+      const user = await this.userService.findUser(payload.email);
+
+      const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
+
+      if (user) {
+        throw new NotAcceptableException();
+      }
+
+      if (client_id !== payload.aud) {
+        throw new UnauthorizedException();
+      }
+
       const { url, file } = this.createImgPath();
       await this.downloadImage(payload.picture, file);
 
