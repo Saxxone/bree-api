@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CreateChatDto } from './dto/create-chat.dto';
-import { UpdateChatDto } from './dto/update-chat.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChatCreatedEvent } from './events/chat.event';
 import { PrismaService } from '../prisma.service';
@@ -84,7 +83,7 @@ export class ChatService {
     return `This action returns a #${id} chat`;
   }
 
-  update(id: number, updateChatDto: UpdateChatDto) {
+  update(id: number) {
     return `This action updates a #${id} chat`;
   }
 

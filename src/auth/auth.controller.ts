@@ -11,7 +11,6 @@ import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
 import { AuthGuard, Public } from './auth.guard';
 import { UserService } from 'src/user/user.service';
-import { JwtService } from '@nestjs/jwt';
 
 @Controller('auth')
 export class AuthController {

@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room, User } from '@prisma/client';
 import { UserService } from '../user/user.service';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class RoomService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
+    private readonly logger = new Logger(RoomService.name),
   ) {}
 
   create(sender: User, receiver: User): Promise<Room> {
@@ -74,7 +76,11 @@ export class RoomService {
       });
 
       return true;
-    } catch (error) {
+    } catch (error: Error | any) {
+      this.logger.error(
+        `Error joining room roomId: ${roomId} userId: ${userId}: ${error.message}`,
+        error.stack,
+      );
       return false;
     }
   }
@@ -128,8 +134,8 @@ export class RoomService {
     return this.create(user1, user2);
   }
 
-  update(id: number, updateRoomDto: UpdateRoomDto) {
-    return `This action updates a #${id} room`;
+  async update(id: number, updateRoomDto: UpdateRoomDto) {
+    return { id, ...updateRoomDto };
   }
 
   remove(id: number) {

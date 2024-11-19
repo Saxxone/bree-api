@@ -37,12 +37,12 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    const { password, ...result } = user;
+    delete user.password;
 
     const payload = { sub: user.email, username: user.username };
 
     return {
-      ...result,
+      ...user,
       access_token: await this.jwtService.signAsync(payload, {
         secret: jwtConstants.secret,
       }),
@@ -86,12 +86,11 @@ export class AuthService {
     if (user.img === default_img) {
       return await this.updateUserProfile(user, payload, default_img);
     } else {
-      const { password, ...result } = user;
-
       const data = { sub: user.email, username: user.username };
+      delete user.password;
 
       return {
-        ...result,
+        ...user,
         access_token: await this.jwtService.signAsync(data, {
           secret: jwtConstants.secret,
         }),
@@ -129,17 +128,18 @@ export class AuthService {
       };
 
       const new_user = await this.userService.createFedUser(u);
-      const { password, ...result } = new_user;
 
       const data = { sub: new_user.email, username: new_user.username };
+      delete user.password;
 
       return {
-        ...result,
+        ...user,
         access_token: await this.jwtService.signAsync(data, {
           secret: jwtConstants.secret,
         }),
       };
     } catch (error) {
+      if (!error) return;
       const default_img = process.env.DEFAULT_PROFILE_IMG;
       const u: CreateFedUserDto = {
         name: payload.name,
@@ -149,12 +149,12 @@ export class AuthService {
       };
 
       const new_user = await this.userService.createFedUser(u);
-      const { password, ...result } = new_user;
 
+      delete new_user.password;
       const data = { sub: new_user.email, username: new_user.username };
 
       return {
-        ...result,
+        ...new_user,
         access_token: await this.jwtService.signAsync(data, {
           secret: jwtConstants.secret,
         }),
@@ -171,27 +171,31 @@ export class AuthService {
       try {
         const { url, file } = this.createImgPath();
         await this.downloadImage(payload.picture, file);
-        const updatedUser = await this.userService.updateUser({
+        const updated_user = await this.userService.updateUser({
           where: { id: user.id },
           data: { img: url },
         });
 
-        const { password, ...result } = updatedUser;
+        delete updated_user.password;
 
-        const data = { sub: updatedUser.email, username: updatedUser.username };
+        const data = {
+          sub: updated_user.email,
+          username: updated_user.username,
+        };
 
         return {
-          ...result,
+          ...updated_user,
           access_token: await this.jwtService.signAsync(data, {
             secret: jwtConstants.secret,
           }),
         };
       } catch (error) {
         console.error('Error downloading or saving image:', error);
-        const { password, ...result } = user;
+
+        delete user.password;
         const data = { sub: user.email, username: user.username };
         return {
-          ...result,
+          ...user,
           access_token: await this.jwtService.signAsync(data, {
             secret: jwtConstants.secret,
           }),

@@ -119,7 +119,6 @@ export class PostController {
     @Param() params: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
-    @Query('cursor') cursor?: string,
   ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { published: true },
@@ -136,7 +135,6 @@ export class PostController {
     @Param() params: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
-    @Query('cursor') cursor?: string,
   ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { published: true, author: { id: params.id } },

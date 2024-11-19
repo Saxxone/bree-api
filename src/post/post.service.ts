@@ -23,7 +23,7 @@ export class PostService {
       data,
     });
 
-    fileIds ?? (await this.fileService.markFileAsUploaded(fileIds));
+    if (fileIds) await this.fileService.markFileAsUploaded(fileIds);
 
     return draft;
   }

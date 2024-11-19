@@ -57,7 +57,7 @@ export class RoomGateway {
 
   @SubscribeMessage('updateRoom')
   update(@MessageBody() updateRoomDto: UpdateRoomDto) {
-    // return this.roomService.update(updateRoomDto.id, updateRoomDto);
+    return `${updateRoomDto});`;
   }
 
   @SubscribeMessage('removeRoom')

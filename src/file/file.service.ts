@@ -1,5 +1,4 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { UpdateFileDto } from './dto/update-file.dto';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
@@ -126,7 +125,7 @@ export class FileService {
     return `This action returns a #${id} file`;
   }
 
-  update(id: string, updateFileDto: UpdateFileDto) {
+  update(id: string) {
     return `This action updates a #${id} file`;
   }
 

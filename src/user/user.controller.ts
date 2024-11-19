@@ -36,7 +36,6 @@ export class UserController {
     @Query('q') searchString: string,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
-    @Query('cursor') cursor?: string,
   ): Promise<UserModel[]> {
     console.log('SEARCH:::', searchString);
     return this.userService.getMultipleUsers({
