@@ -34,6 +34,7 @@ export class ExceptionsLoggerFilter implements ExceptionFilter {
       }
     });
 
+    //format response object when exception is thrown
     response.status(status).json({
       status: status,
       message: exception.message,

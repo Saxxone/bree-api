@@ -36,6 +36,7 @@ model User {
   deletedBy       Chat[]    @relation("chatDeletedBy")
   Room            Room?     @relation(fields: [roomId], references: [id])
   roomId          String?
+  publicKey       String?
 }
 
 model Post {
@@ -103,7 +104,7 @@ model Room {
   participants User[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  type         Type @default(PRIVATE)
+  type         Type     @default(PRIVATE)
 }
 
 enum Status {

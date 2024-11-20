@@ -21,6 +21,7 @@ export class ChatService {
     const { text, media, mediaType } = newChat;
     const sender = await this.userService.findUser(newChat.fromUserId);
     const receiver = await this.userService.findUser(newChat.toUserId);
+    const base64Encoded = Buffer.from(text).toString('base64');
 
     const room = newChat.roomId
       ? await this.roomService.findOne(newChat.roomId)
@@ -28,7 +29,7 @@ export class ChatService {
 
     const chat = await this.prisma.chat.create({
       data: {
-        ...(text && { text }),
+        ...(text && { text: base64Encoded }),
         ...(media && { media }),
         ...(mediaType && { mediaType: [mediaType] }),
         status: Status.SENT,
@@ -53,8 +54,8 @@ export class ChatService {
     this.eventEmitter.emit(
       'chat.created',
       new ChatCreatedEvent({
-        name: newChat.text,
-        description: newChat.text,
+        name: base64Encoded,
+        description: base64Encoded,
         fromUserId: newChat.fromUserId,
       }),
     );

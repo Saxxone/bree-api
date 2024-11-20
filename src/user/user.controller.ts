@@ -57,11 +57,12 @@ export class UserController {
     });
   }
 
-  @Put('user/:id')
+  @Put('update/:id')
   async updateUser(
     @Param('id') id: string,
-    data: Partial<User>,
+    @Body() data: Partial<User>,
   ): Promise<UserModel> {
+    console.log('DATA:::', data);
     return this.userService.updateUser({
       where: { id: String(id) },
       data,

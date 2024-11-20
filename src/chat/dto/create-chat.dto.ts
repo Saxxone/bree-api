@@ -1,5 +1,5 @@
 export class CreateChatDto {
-  text: string;
+  text: ArrayBuffer;
   media?: string;
   mediaType?: string;
   toUserId: string;
