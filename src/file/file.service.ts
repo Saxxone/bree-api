@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
+import { UpdateFileDto } from './dto/update-file.dto';
 
 @Injectable()
 export class FileService {
@@ -125,8 +126,8 @@ export class FileService {
     return `This action returns a #${id} file`;
   }
 
-  update(id: string) {
-    return `This action updates a #${id} file`;
+  update(id: string, updateFileDto: UpdateFileDto) {
+    return `This action updates a #${id} file ${updateFileDto}`;
   }
 
   remove(id: string) {

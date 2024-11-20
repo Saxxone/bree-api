@@ -7,10 +7,11 @@ import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class RoomService {
+  private readonly logger = new Logger(RoomService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
-    private readonly logger = new Logger(RoomService.name),
   ) {}
 
   create(sender: User, receiver: User): Promise<Room> {
