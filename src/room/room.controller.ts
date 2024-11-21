@@ -39,8 +39,8 @@ export class RoomController {
   }
 
   @Patch('/update/:id')
-  update(@Param('id') id: string, @Body() updateRoomDto: UpdateRoomDto, @Request() req: any) {
-    return this.roomService.update(id, updateRoomDto, req.user.sub);
+  update(@Param('id') id: string, @Body() updateRoomDto: UpdateRoomDto) {
+    return this.roomService.update(id, updateRoomDto);
   }
 
   @Delete(':id')

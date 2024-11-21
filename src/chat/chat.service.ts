@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CreateChatDto } from './dto/create-chat.dto';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ChatCreatedEvent } from './events/chat.event';
+
 import { PrismaService } from '../prisma.service';
 import { Chat, Status } from '@prisma/client';
 import { UserService } from 'src/user/user.service';
@@ -11,14 +10,13 @@ import { UpdateChatDto } from './dto/update-chat.dto';
 @Injectable()
 export class ChatService {
   constructor(
-    private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
     private readonly roomService: RoomService,
   ) {}
 
   async create(new_chat: CreateChatDto): Promise<Chat> {
-    const { text, media, mediaType } = new_chat;
+    const { media, mediaType } = new_chat;
     const sender = await this.userService.findUser(new_chat.fromUserId);
     const receiver = await this.userService.findUser(new_chat.toUserId);
 

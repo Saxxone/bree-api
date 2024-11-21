@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { Room, User, Prisma } from '@prisma/client';
+import { Room, User } from '@prisma/client';
 import { UserService } from '../user/user.service';
 
 @Injectable()
@@ -147,7 +147,7 @@ export class RoomService {
     return this.create(user1, user2);
   }
 
-  async update(roomId: string, updateRoomDto: UpdateRoomDto, email: string) {
+  async update(roomId: string, updateRoomDto: UpdateRoomDto) {
     return updateRoomDto;
   }
 
