@@ -82,7 +82,7 @@ export class RoomService {
   async joinRoom(
     roomId: string,
     userId: string,
-    publicKey: ArrayBuffer,
+    // publicKey: ArrayBuffer,
   ): Promise<boolean> {
     try {
       const user = await this.userService.findUser(userId);
