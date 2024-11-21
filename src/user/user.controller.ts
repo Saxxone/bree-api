@@ -36,7 +36,6 @@ export class UserController {
     @Query('q') searchString: string,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
-    @Query('cursor') cursor?: string,
   ): Promise<UserModel[]> {
     console.log('SEARCH:::', searchString);
     return this.userService.getMultipleUsers({
@@ -58,10 +57,10 @@ export class UserController {
     });
   }
 
-  @Put('user/:id')
+  @Put('update/:id')
   async updateUser(
     @Param('id') id: string,
-    data: Partial<User>,
+    @Body() data: Partial<User>,
   ): Promise<UserModel> {
     return this.userService.updateUser({
       where: { id: String(id) },

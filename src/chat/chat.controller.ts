@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Post,
   Body,
   Patch,
   Param,
@@ -11,7 +10,6 @@ import {
 
 import { UpdateChatDto } from './dto/update-chat.dto';
 import { OnEvent } from '@nestjs/event-emitter';
-import { ChatCreatedEvent } from './events/chat.event';
 import { ChatService } from './chat.service';
 
 @Controller('chats')
@@ -19,7 +17,7 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @OnEvent('chat.created')
-  handleOrderCreatedEvent(payload: ChatCreatedEvent) {
+  handleOrderCreatedEvent() {
     // handle and process "ChatCreatedEvent" event
   }
 

@@ -5,7 +5,7 @@ import { ChatCreatedEvent } from '../events/chat.event';
 @Injectable()
 export class ChatCreatedListener {
   @OnEvent('chat.created')
-  handleChatCreatedEvent<T>(event: ChatCreatedEvent) {
+  handleChatCreatedEvent(event: ChatCreatedEvent) {
     console.log(event);
   }
 }

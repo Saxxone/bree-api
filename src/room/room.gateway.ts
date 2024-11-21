@@ -24,7 +24,7 @@ export class RoomGateway {
   @WebSocketServer()
   server: Server;
 
-  @SubscribeMessage('findOneRoom')
+  @SubscribeMessage('find-one-room')
   findOne(@MessageBody() id: string) {
     return this.roomService.findOne(id);
   }
@@ -57,7 +57,7 @@ export class RoomGateway {
 
   @SubscribeMessage('updateRoom')
   update(@MessageBody() updateRoomDto: UpdateRoomDto) {
-    // return this.roomService.update(updateRoomDto.id, updateRoomDto);
+    return `${updateRoomDto});`;
   }
 
   @SubscribeMessage('removeRoom')
