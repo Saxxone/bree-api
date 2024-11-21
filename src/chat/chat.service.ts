@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CreateChatDto } from './dto/create-chat.dto';
-
 import { PrismaService } from '../prisma.service';
 import { Chat, Status } from '@prisma/client';
 import { UserService } from 'src/user/user.service';
