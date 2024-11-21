@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { Room, User, UserRoomKey } from '@prisma/client';
+import { Room, User, Prisma } from '@prisma/client';
 import { UserService } from '../user/user.service';
 
 @Injectable()
@@ -29,27 +29,7 @@ export class RoomService {
       },
     });
 
-    // sender encryption key //todo set correct key
-    await this.createUserRoomKey(sender.id, room.id, 'senderKey');
-
     return room;
-  }
-
-  async createUserRoomKey(
-    userId: string,
-    roomId: string,
-    key: string,
-  ): Promise<UserRoomKey> {
-    const base64Key =
-      typeof key === 'string' ? key : Buffer.from(key).toString('base64');
-
-    return this.prisma.userRoomKey.create({
-      data: {
-        user: { connect: { id: userId } },
-        room: { connect: { id: roomId } },
-        encryptionKey: base64Key, // Store the Base64 encoded key
-      },
-    });
   }
 
   findAllWithParticipant(email: string) {
@@ -75,6 +55,13 @@ export class RoomService {
     return this.prisma.chat.findMany({
       where: {
         roomId,
+      },
+      include: {
+        userEncryptedMessages: {
+          include: {
+            user: true,
+          },
+        },
       },
     });
   }
@@ -160,8 +147,8 @@ export class RoomService {
     return this.create(user1, user2);
   }
 
-  async update(id: number, updateRoomDto: UpdateRoomDto) {
-    return { id, ...updateRoomDto };
+  async update(roomId: string, updateRoomDto: UpdateRoomDto, email: string) {
+    return updateRoomDto;
   }
 
   remove(id: number) {

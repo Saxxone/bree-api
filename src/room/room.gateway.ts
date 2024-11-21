@@ -24,7 +24,7 @@ export class RoomGateway {
   @WebSocketServer()
   server: Server;
 
-  @SubscribeMessage('findOneRoom')
+  @SubscribeMessage('find-one-room')
   findOne(@MessageBody() id: string) {
     return this.roomService.findOne(id);
   }
@@ -37,7 +37,6 @@ export class RoomGateway {
     const status = await this.roomService.joinRoom(
       roomData.roomId,
       roomData.userId,
-      roomData.publicKey,
     );
     if (status) {
       client.join(roomData.roomId);

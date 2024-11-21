@@ -5,4 +5,6 @@ export class CreateChatDto {
   toUserId: string;
   fromUserId: string;
   roomId?: string;
+  senderEncryptedMessage?: ArrayBuffer;
+  receiverEncryptedMessage?: ArrayBuffer;
 }

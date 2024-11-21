@@ -62,7 +62,6 @@ export class UserController {
     @Param('id') id: string,
     @Body() data: Partial<User>,
   ): Promise<UserModel> {
-    console.log('DATA:::', data);
     return this.userService.updateUser({
       where: { id: String(id) },
       data,

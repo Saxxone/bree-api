@@ -38,9 +38,9 @@ export class RoomController {
     return this.roomService.findChatsInRoom(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateRoomDto: UpdateRoomDto) {
-    return this.roomService.update(+id, updateRoomDto);
+  @Patch('/update/:id')
+  update(@Param('id') id: string, @Body() updateRoomDto: UpdateRoomDto, @Request() req: any) {
+    return this.roomService.update(id, updateRoomDto, req.user.sub);
   }
 
   @Delete(':id')
