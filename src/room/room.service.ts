@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room, User } from '@prisma/client';
@@ -6,13 +6,15 @@ import { UserService } from '../user/user.service';
 
 @Injectable()
 export class RoomService {
+  private readonly logger = new Logger(RoomService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
   ) {}
 
-  create(sender: User, receiver: User): Promise<Room> {
-    return this.prisma.room.create({
+  async create(sender: User, receiver: User): Promise<Room> {
+    const room = await this.prisma.room.create({
       data: {
         participants: {
           connect: [
@@ -26,6 +28,8 @@ export class RoomService {
         },
       },
     });
+
+    return room;
   }
 
   findAllWithParticipant(email: string) {
@@ -52,10 +56,21 @@ export class RoomService {
       where: {
         roomId,
       },
+      include: {
+        userEncryptedMessages: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
   }
 
-  async joinRoom(roomId: string, userId: string): Promise<boolean> {
+  async joinRoom(
+    roomId: string,
+    userId: string,
+    // publicKey: ArrayBuffer,
+  ): Promise<boolean> {
     try {
       const user = await this.userService.findUser(userId);
       const room = await this.findOne(roomId);
@@ -74,7 +89,11 @@ export class RoomService {
       });
 
       return true;
-    } catch (error) {
+    } catch (error: Error | any) {
+      this.logger.error(
+        `Error joining room roomId: ${roomId} userId: ${userId}: ${error.message}`,
+        error.stack,
+      );
       return false;
     }
   }
@@ -128,8 +147,8 @@ export class RoomService {
     return this.create(user1, user2);
   }
 
-  update(id: number, updateRoomDto: UpdateRoomDto) {
-    return `This action updates a #${id} room`;
+  async update(roomId: string, updateRoomDto: UpdateRoomDto) {
+    return updateRoomDto;
   }
 
   remove(id: number) {

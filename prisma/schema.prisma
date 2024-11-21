@@ -15,27 +15,29 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(uuid())
-  email           String    @unique
-  username        String    @unique
-  name            String
-  bio             String?   @db.VarChar(140)
-  verified        Boolean   @default(false)
-  banner          String?
-  img             String
-  password        String?
-  posts           Post[]
-  files           File[]
-  likedPosts      Post[]    @relation("likedPosts")
-  bookmarkedPosts Post[]    @relation("bookmarkedPosts")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
-  recipient       Chat[]    @relation("chatRecipient")
-  sender          Chat[]    @relation("chatSender")
-  deletedBy       Chat[]    @relation("chatDeletedBy")
-  Room            Room?     @relation(fields: [roomId], references: [id])
-  roomId          String?
+  id                        String                     @id @default(uuid())
+  email                     String                     @unique
+  username                  String                     @unique
+  name                      String
+  bio                       String?                    @db.VarChar(140)
+  verified                  Boolean                    @default(false)
+  banner                    String?
+  img                       String
+  password                  String?
+  posts                     Post[]
+  files                     File[]
+  likedPosts                Post[]                     @relation("likedPosts")
+  bookmarkedPosts           Post[]                     @relation("bookmarkedPosts")
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  deletedAt                 DateTime?
+  recipient                 Chat[]                     @relation("chatRecipient")
+  sender                    Chat[]                     @relation("chatSender")
+  deletedBy                 Chat[]                     @relation("chatDeletedBy")
+  Room                      Room?                      @relation(fields: [roomId], references: [id])
+  roomId                    String?
+  publicKey                 String?
+  userChatEncryptedMessages UserChatEncryptedMessage[]
 }
 
 model Post {
@@ -77,24 +79,35 @@ model File {
 }
 
 model Chat {
-  id              String    @id @default(uuid())
-  to              User      @relation("chatRecipient", fields: [toUserId], references: [id])
-  from            User      @relation("chatSender", fields: [fromUserId], references: [id])
-  text            String?
-  media           String?
-  mediaType       String[]
-  read            Boolean   @default(false)
-  deletedBy       User?     @relation("chatDeletedBy", fields: [deletedByUserId], references: [id])
-  deletedByUserId String?
-  deletedByMe     Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
-  toUserId        String
-  fromUserId      String
-  status          Status    @default(PENDING)
-  room            Room?     @relation(fields: [roomId], references: [id])
-  roomId          String?
+  id                    String                     @id @default(uuid())
+  to                    User                       @relation("chatRecipient", fields: [toUserId], references: [id])
+  from                  User                       @relation("chatSender", fields: [fromUserId], references: [id])
+  text                  String?
+  media                 String?
+  mediaType             String[]
+  read                  Boolean                    @default(false)
+  deletedBy             User?                      @relation("chatDeletedBy", fields: [deletedByUserId], references: [id])
+  deletedByUserId       String?
+  deletedByMe           Boolean                    @default(false)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  deletedAt             DateTime?
+  toUserId              String
+  fromUserId            String
+  status                Status                     @default(PENDING)
+  room                  Room?                      @relation(fields: [roomId], references: [id])
+  roomId                String?
+  userEncryptedMessages UserChatEncryptedMessage[]
+}
+
+model UserChatEncryptedMessage {
+  id               String   @id @default(uuid())
+  chat             Chat     @relation(fields: [chatId], references: [id])
+  chatId           String
+  user             User     @relation(fields: [userId], references: [id])
+  userId           String
+  encryptedMessage String
+  createdAt        DateTime @default(now())
 }
 
 model Room {
@@ -103,7 +116,7 @@ model Room {
   participants User[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  type         Type @default(PRIVATE)
+  roomType     RoomType @default(PRIVATE)
 }
 
 enum Status {
@@ -117,7 +130,7 @@ enum Status {
   SEEN
 }
 
-enum Type {
+enum RoomType {
   PRIVATE
   PUBLIC
 }

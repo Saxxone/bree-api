@@ -1,45 +1,41 @@
 import { Injectable } from '@nestjs/common';
 import { CreateChatDto } from './dto/create-chat.dto';
-import { UpdateChatDto } from './dto/update-chat.dto';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ChatCreatedEvent } from './events/chat.event';
 import { PrismaService } from '../prisma.service';
 import { Chat, Status } from '@prisma/client';
 import { UserService } from 'src/user/user.service';
 import { RoomService } from 'src/room/room.service';
+import { UpdateChatDto } from './dto/update-chat.dto';
 
 @Injectable()
 export class ChatService {
   constructor(
-    private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
     private readonly roomService: RoomService,
   ) {}
 
-  async create(newChat: CreateChatDto): Promise<Chat> {
-    const { text, media, mediaType } = newChat;
-    const sender = await this.userService.findUser(newChat.fromUserId);
-    const receiver = await this.userService.findUser(newChat.toUserId);
+  async create(new_chat: CreateChatDto): Promise<Chat> {
+    const { media, mediaType } = new_chat;
+    const sender = await this.userService.findUser(new_chat.fromUserId);
+    const receiver = await this.userService.findUser(new_chat.toUserId);
 
-    const room = newChat.roomId
-      ? await this.roomService.findOne(newChat.roomId)
+    const room = new_chat.roomId
+      ? await this.roomService.findOne(new_chat.roomId)
       : await this.roomService.create(sender, receiver);
 
-    const chat = await this.prisma.chat.create({
+    const created_chat = await this.prisma.chat.create({
       data: {
-        ...(text && { text }),
         ...(media && { media }),
         ...(mediaType && { mediaType: [mediaType] }),
         status: Status.SENT,
         to: {
           connect: {
-            id: newChat.toUserId,
+            id: new_chat.toUserId,
           },
         },
         from: {
           connect: {
-            id: newChat.fromUserId,
+            id: new_chat.fromUserId,
           },
         },
         room: {
@@ -47,18 +43,45 @@ export class ChatService {
             id: room.id,
           },
         },
+        userEncryptedMessages: {
+          create: [
+            {
+              user: { connect: { id: sender.id } },
+              encryptedMessage: await this.arrayBufferToBase64(
+                new_chat.senderEncryptedMessage,
+              ),
+            },
+            {
+              user: { connect: { id: receiver.id } },
+              encryptedMessage: await this.arrayBufferToBase64(
+                new_chat.receiverEncryptedMessage,
+              ),
+            },
+          ],
+        },
+      },
+      include: {
+        userEncryptedMessages: {
+          include: {
+            user: true,
+          },
+        },
       },
     });
 
-    this.eventEmitter.emit(
-      'chat.created',
-      new ChatCreatedEvent({
-        name: newChat.text,
-        description: newChat.text,
-        fromUserId: newChat.fromUserId,
-      }),
-    );
-    return chat;
+    // this.eventEmitter.emit(
+    //   'chat.created',
+    //   new ChatCreatedEvent({
+    //     name: '',
+    //     description: '',
+    //     fromUserId: newChat.fromUserId,
+    //   }),
+    // );
+    return created_chat;
+  }
+
+  async arrayBufferToBase64(message: ArrayBuffer): Promise<string> {
+    return Buffer.from(message).toString('base64');
   }
 
   async findAll(to: 'uuid', from: 'email') {
@@ -85,7 +108,7 @@ export class ChatService {
   }
 
   update(id: number, updateChatDto: UpdateChatDto) {
-    return `This action updates a #${id} chat`;
+    return `This action updates a #${id} chat ${updateChatDto}`;
   }
 
   remove(id: number) {
