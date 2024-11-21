@@ -61,11 +61,7 @@ export class ChatService {
         },
       },
       include: {
-        userEncryptedMessages: {
-          include: {
-            user: true,
-          },
-        },
+        userEncryptedMessages: true,
       },
     });
 
