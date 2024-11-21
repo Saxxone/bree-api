@@ -57,11 +57,7 @@ export class RoomService {
         roomId,
       },
       include: {
-        userEncryptedMessages: {
-          include: {
-            user: true,
-          },
-        },
+        userEncryptedMessages: true,
       },
     });
   }
