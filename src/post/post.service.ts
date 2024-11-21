@@ -130,16 +130,33 @@ export class PostService {
     cursor?: Prisma.PostWhereUniqueInput;
     where?: Prisma.PostWhereInput;
     orderBy?: Prisma.PostOrderByWithRelationInput;
+    currentUserEmail: string;
   }): Promise<Post[]> {
     const { skip, take, cursor, where, orderBy } = params;
-    return this.prisma.post.findMany({
+    const posts = await this.prisma.post.findMany({
       skip,
       take,
       cursor,
       where,
       orderBy,
-      include: { author: true },
+      include: { likedBy: true, bookmarkedBy: true, author: true }, // Include likedBy and bookmarkedBy
     });
+
+    const postsWithUserFlags = posts.map((post) => {
+      return {
+        ...post,
+        author: post.author,
+
+        likedByMe: post.likedBy.some(
+          (user) => user.email === params.currentUserEmail,
+        ),
+        bookmarkedByMe: post.bookmarkedBy.some(
+          (user) => user.email === params.currentUserEmail,
+        ),
+      };
+    });
+
+    return postsWithUserFlags;
   }
 
   async updatePost(params: {

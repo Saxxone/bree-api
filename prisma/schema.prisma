@@ -15,28 +15,28 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(uuid())
-  email           String    @unique
-  username        String    @unique
+  id              String        @id @default(uuid())
+  email           String        @unique
+  username        String        @unique
   name            String
-  bio             String?   @db.VarChar(140)
-  verified        Boolean   @default(false)
+  bio             String?       @db.VarChar(140)
+  verified        Boolean       @default(false)
   banner          String?
   img             String
   password        String?
   posts           Post[]
   files           File[]
-  likedPosts      Post[]    @relation("likedPosts")
-  bookmarkedPosts Post[]    @relation("bookmarkedPosts")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  likedPosts      Post[]        @relation("likedPosts")
+  bookmarkedPosts Post[]        @relation("bookmarkedPosts")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   deletedAt       DateTime?
-  recipient       Chat[]    @relation("chatRecipient")
-  sender          Chat[]    @relation("chatSender")
-  deletedBy       Chat[]    @relation("chatDeletedBy")
-  Room            Room?     @relation(fields: [roomId], references: [id])
+  recipient       Chat[]        @relation("chatRecipient")
+  sender          Chat[]        @relation("chatSender")
+  deletedBy       Chat[]        @relation("chatDeletedBy")
+  Room            Room?         @relation(fields: [roomId], references: [id])
   roomId          String?
-  publicKey       String?
+  userRoomKeys    UserRoomKey[]
 }
 
 model Post {
@@ -99,12 +99,23 @@ model Chat {
 }
 
 model Room {
-  id           String   @id @default(uuid())
+  id           String        @id @default(uuid())
   chats        Chat[]
   participants User[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  type         Type     @default(PRIVATE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  roomType     RoomType      @default(PRIVATE)
+  userRoomKeys UserRoomKey[]
+}
+
+model UserRoomKey {
+  id            String   @id @default(uuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  room          Room     @relation(fields: [roomId], references: [id])
+  roomId        String
+  encryptionKey String
+  createdAt     DateTime @default(now())
 }
 
 enum Status {
@@ -118,7 +129,7 @@ enum Status {
   SEEN
 }
 
-enum Type {
+enum RoomType {
   PRIVATE
   PUBLIC
 }

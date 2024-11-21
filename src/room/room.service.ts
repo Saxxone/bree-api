@@ -1,9 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { Room, User } from '@prisma/client';
+import { Room, User, UserRoomKey } from '@prisma/client';
 import { UserService } from '../user/user.service';
-import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class RoomService {
@@ -14,8 +13,8 @@ export class RoomService {
     private readonly userService: UserService,
   ) {}
 
-  create(sender: User, receiver: User): Promise<Room> {
-    return this.prisma.room.create({
+  async create(sender: User, receiver: User): Promise<Room> {
+    const room = await this.prisma.room.create({
       data: {
         participants: {
           connect: [
@@ -27,6 +26,28 @@ export class RoomService {
             },
           ],
         },
+      },
+    });
+
+    // sender encryption key //todo set correct key
+    await this.createUserRoomKey(sender.id, room.id, 'senderKey');
+
+    return room;
+  }
+
+  async createUserRoomKey(
+    userId: string,
+    roomId: string,
+    key: string,
+  ): Promise<UserRoomKey> {
+    const base64Key =
+      typeof key === 'string' ? key : Buffer.from(key).toString('base64');
+
+    return this.prisma.userRoomKey.create({
+      data: {
+        user: { connect: { id: userId } },
+        room: { connect: { id: roomId } },
+        encryptionKey: base64Key, // Store the Base64 encoded key
       },
     });
   }
@@ -58,7 +79,11 @@ export class RoomService {
     });
   }
 
-  async joinRoom(roomId: string, userId: string): Promise<boolean> {
+  async joinRoom(
+    roomId: string,
+    userId: string,
+    publicKey: ArrayBuffer,
+  ): Promise<boolean> {
     try {
       const user = await this.userService.findUser(userId);
       const room = await this.findOne(roomId);

@@ -84,9 +84,13 @@ export class PostController {
   }
 
   @Get('/comments/:id')
-  async getCommentsForPost(@Param('id') id: string): Promise<PostModel[]> {
+  async getCommentsForPost(
+    @Request() req: any,
+    @Param('id') id: string,
+  ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { parent: { id: id } },
+      currentUserEmail: req.user.sub,
     });
   }
 
@@ -116,7 +120,7 @@ export class PostController {
 
   @Post('feed')
   async getPublishedPosts(
-    @Param() params: any,
+    @Request() req: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<PostModel[]> {
@@ -127,12 +131,14 @@ export class PostController {
       },
       skip: Number(skip),
       take: Number(take),
+      currentUserEmail: req.user.sub,
     });
   }
 
   @Get('user/:id/posts')
   async getUserPosts(
     @Param() params: any,
+    @Request() req: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<PostModel[]> {
@@ -143,11 +149,15 @@ export class PostController {
       },
       skip: Number(skip),
       take: Number(take),
+      currentUserEmail: req.user.sub,
     });
   }
 
   @Post('/search')
-  async getFilteredPosts(@Query('q') q?: string): Promise<PostModel[]> {
+  async getFilteredPosts(
+    @Request() req: any,
+    @Query('q') q?: string,
+  ): Promise<PostModel[]> {
     const cleanedQuery = q.trim().replace(/[^a-zA-Z0-9\s]/g, ' ');
 
     const query =
@@ -162,6 +172,7 @@ export class PostController {
           search: query,
         },
       },
+      currentUserEmail: req.user.sub,
     });
   }
 

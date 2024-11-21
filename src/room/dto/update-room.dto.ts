@@ -8,4 +8,5 @@ export class UpdateRoomDto extends PartialType(CreateRoomDto) {
 export class JoinRoomDto extends PartialType(CreateRoomDto) {
   roomId: string;
   userId: string;
+  publicKey: ArrayBuffer
 }
