@@ -40,25 +40,32 @@ export class PostController {
   ): Promise<PostModel> {
     const { text, media, parentId } = postData;
 
-    return await this.postService.createPost({
-      text,
-      media,
-      author: {
-        connect: { email: req.user.sub },
-      },
-      ...(parentId && {
-        parent: {
-          connect: { id: parentId },
+    return await this.postService.createPost(
+      {
+        text,
+        media,
+        author: {
+          connect: { email: req.user.sub },
         },
-      }),
-    });
+        ...(parentId && {
+          parent: {
+            connect: { id: parentId },
+          },
+        }),
+      },
+      req.user.sub,
+    );
   }
 
   @Put('publish/:id')
-  async publishPost(@Param('id') id: string): Promise<PostModel> {
+  async publishPost(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<PostModel> {
     return await this.postService.updatePost({
       where: { id: String(id) },
       data: { published: true },
+      email: req.user.sub,
     });
   }
 
@@ -79,8 +86,11 @@ export class PostController {
   }
 
   @Get('/:id')
-  async getPostById(@Param('id') id: string): Promise<PostModel> {
-    return await this.postService.viewSinglePost(id);
+  async getPostById(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<PostModel> {
+    return await this.postService.viewSinglePost(id, req.user.sub);
   }
 
   @Get('/comments/:id')
