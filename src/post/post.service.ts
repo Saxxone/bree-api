@@ -28,7 +28,7 @@ export class PostService {
     return draft;
   }
 
-  async createPost(data: Prisma.PostCreateInput): Promise<Post> {
+  async createPost(data: Prisma.PostCreateInput, email: string): Promise<Post> {
     const fileIds = data.media as string[];
 
     if (fileIds.length > 0) {
@@ -48,9 +48,11 @@ export class PostService {
       data: {
         published: true,
       },
+      email,
     });
 
-    if (post.parentId) this.incrementParentPostCommentCount(post.parentId);
+    if (post.parentId)
+      this.incrementParentPostCommentCount(post.parentId, email);
 
     return p;
   }
@@ -67,29 +69,42 @@ export class PostService {
     return post;
   }
 
-  async incrementParentPostCommentCount(postId: string): Promise<Post> {
+  async incrementParentPostCommentCount(
+    postId: string,
+    email: string,
+  ): Promise<Post> {
     const parentPost = await this.findParentPost(postId);
 
     return this.updatePost({
       where: { id: postId },
       data: { commentCount: parentPost.commentCount + 1 },
+      email,
     });
   }
 
-  async findPost(postId: string): Promise<Post | null> {
+  async findPost(postId: string, email: string): Promise<Post | null> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
+      include: { likedBy: true, bookmarkedBy: true, author: true },
     });
 
     if (!post) {
       throw new NotFoundException('Post not found');
     }
 
-    return post;
+    const postWithUserFlags = {
+      ...post,
+      author: post.author,
+
+      likedByMe: post.likedBy.some((user) => user.email === email),
+      bookmarkedByMe: post.bookmarkedBy.some((user) => user.email === email),
+    };
+
+    return postWithUserFlags;
   }
 
-  async viewSinglePost(postId: string): Promise<Post> {
-    return this.prisma.post.findUnique({
+  async viewSinglePost(postId: string, email): Promise<Post> {
+    const post = await this.prisma.post.findUnique({
       where: { id: postId },
       include: {
         comments: true,
@@ -98,6 +113,16 @@ export class PostService {
         bookmarkedBy: true,
       },
     });
+
+    const postWithUserFlags = {
+      ...post,
+      author: post.author,
+
+      likedByMe: post.likedBy.some((user) => user.email === email),
+      bookmarkedByMe: post.bookmarkedBy.some((user) => user.email === email),
+    };
+
+    return postWithUserFlags;
   }
 
   async checkIfUserLikedPost(
@@ -139,7 +164,7 @@ export class PostService {
       cursor,
       where,
       orderBy,
-      include: { likedBy: true, bookmarkedBy: true, author: true }, // Include likedBy and bookmarkedBy
+      include: { likedBy: true, bookmarkedBy: true, author: true },
     });
 
     const postsWithUserFlags = posts.map((post) => {
@@ -162,14 +187,27 @@ export class PostService {
   async updatePost(params: {
     where: Prisma.PostWhereUniqueInput;
     data: Prisma.PostUpdateInput;
+    email: string;
   }): Promise<Post> {
     const { data, where } = params;
 
-    return this.prisma.post.update({
+    const post = await this.prisma.post.update({
       data,
       where,
-      include: { author: true },
+      include: { likedBy: true, bookmarkedBy: true, author: true },
     });
+
+    const postWithUserFlags = {
+      ...post,
+      author: post.author,
+
+      likedByMe: post.likedBy.some((user) => user.email === params.email),
+      bookmarkedByMe: post.bookmarkedBy.some(
+        (user) => user.email === params.email,
+      ),
+    };
+
+    return postWithUserFlags;
   }
 
   async likePost(postId: string, email: string): Promise<Post> {
@@ -197,6 +235,7 @@ export class PostService {
         likedBy: status ? { disconnect: { email } } : { connect: { email } },
         likeCount: status ? post.likeCount - 1 : post.likeCount + 1,
       },
+      email,
     });
   }
 
@@ -228,6 +267,7 @@ export class PostService {
           : { connect: { email } },
         bookmarkCount: status ? post.bookmarkCount - 1 : post.bookmarkCount + 1,
       },
+      email,
     });
   }
 
