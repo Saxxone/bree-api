@@ -1,12 +1,11 @@
-import { PostType, LongPostBlock } from '@prisma/client'; // Correct import
+import { PostType, LongPostBlock } from '@prisma/client';
 import {
   IsString,
   ValidateNested,
   IsArray,
   ArrayNotEmpty,
   Allow,
-} from 'class-validator'; // Add necessary validators
-import { Type } from 'class-transformer';
+} from 'class-validator';
 
 export class CreatePostDto {
   @IsString()

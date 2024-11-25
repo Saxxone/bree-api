@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PostService } from './post.service';
-import { LongPost, Post as PostModel, PostType, Prisma } from '@prisma/client';
+import { Post as PostModel } from '@prisma/client';
 import { CreatePostDto } from './dto/create-post.dto';
 
 @Controller('posts')

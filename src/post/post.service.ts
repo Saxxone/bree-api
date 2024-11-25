@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { LongPost, Post, PostType, Prisma } from '@prisma/client';
+import { Post, PostType, Prisma } from '@prisma/client';
 import { FileService } from 'src/file/file.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
