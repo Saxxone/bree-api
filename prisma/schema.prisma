@@ -38,6 +38,7 @@ model User {
   roomId                    String?
   publicKey                 String?
   userChatEncryptedMessages UserChatEncryptedMessage[]
+  LongPost                  LongPost[]
 }
 
 model Post {
@@ -59,6 +60,28 @@ model Post {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
+  type          PostType  @default(SHORT)
+  longPost      LongPost? @relation(fields: [longPostId], references: [id])
+  longPostId    String?
+}
+
+model LongPost {
+  id        String          @id @default(uuid())
+  content   LongPostBlock[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  Post      Post[]
+  User      User?           @relation(fields: [userId], references: [id])
+  userId    String?
+}
+
+model LongPostBlock {
+  id         String   @id @default(uuid())
+  longPostId String
+  longPost   LongPost @relation(fields: [longPostId], references: [id])
+  text       String
+  media      String[]
+  mediaTypes String[]
 }
 
 model File {
@@ -133,4 +156,9 @@ enum Status {
 enum RoomType {
   PRIVATE
   PUBLIC
+}
+
+enum PostType {
+  LONG
+  SHORT
 }

@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PostService } from './post.service';
-import { Post as PostModel } from '@prisma/client';
+import { LongPost, Post as PostModel, PostType, Prisma } from '@prisma/client';
 import { CreatePostDto } from './dto/create-post.dto';
 
 @Controller('posts')
@@ -22,15 +22,17 @@ export class PostController {
     @Request() req: any,
     @Body() postData: CreatePostDto,
   ): Promise<PostModel> {
-    const { text, media } = postData;
-
-    return await this.postService.createDraft({
-      text,
-      media,
-      author: {
-        connect: { email: req.user.sub },
+    return await this.postService.createPost(
+      {
+        ...postData,
+        ...(postData.type && { type: postData.type }),
+        ...(postData.longPost && {
+          longPost: postData.longPost,
+        }),
       },
-    });
+      false,
+      req.user.sub,
+    );
   }
 
   @Post('create-post')
@@ -38,21 +40,16 @@ export class PostController {
     @Request() req: any,
     @Body() postData: CreatePostDto,
   ): Promise<PostModel> {
-    const { text, media, parentId } = postData;
-
+    console.log(postData);
     return await this.postService.createPost(
       {
-        text,
-        media,
-        author: {
-          connect: { email: req.user.sub },
-        },
-        ...(parentId && {
-          parent: {
-            connect: { id: parentId },
-          },
+        ...postData,
+        ...(postData.type && { type: postData.type }),
+        ...(postData.longPost && {
+          longPost: postData.longPost,
         }),
       },
+      true,
       req.user.sub,
     );
   }

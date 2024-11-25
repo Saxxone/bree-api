@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { Post, Prisma } from '@prisma/client';
+import { LongPost, Post, PostType, Prisma } from '@prisma/client';
 import { FileService } from 'src/file/file.service';
+import { CreatePostDto } from './dto/create-post.dto';
 
 @Injectable()
 export class PostService {
@@ -10,51 +11,88 @@ export class PostService {
     private readonly fileService: FileService,
   ) {}
 
-  async createDraft(data: Prisma.PostCreateInput): Promise<Post> {
+  async createPost(
+    data: CreatePostDto,
+    published: boolean,
+    email: string,
+  ): Promise<Post> {
     const fileIds = data.media as string[];
 
-    if (fileIds.length > 0) {
+    if (fileIds.length > 0 && data.type === PostType.SHORT) {
       const res = await this.fileService.getFilesUrls(data.media as any);
       data.media = res.map((file) => file.url);
       data.mediaTypes = res.map((file) => file.type);
     }
+    if (data.type === PostType.LONG) {
+      try {
+        const contents = await Promise.all(
+          data.longPost.content.map(async (c) => {
+            const res = await this.fileService.getFilesUrls(c.media); // Assuming getFilesUrls expects an array
+            return res[0];
+          }),
+        );
 
-    const draft = this.prisma.post.create({
-      data,
-    });
-
-    if (fileIds) await this.fileService.markFileAsUploaded(fileIds);
-
-    return draft;
-  }
-
-  async createPost(data: Prisma.PostCreateInput, email: string): Promise<Post> {
-    const fileIds = data.media as string[];
-
-    if (fileIds.length > 0) {
-      const res = await this.fileService.getFilesUrls(data.media as any);
-      data.media = res.map((file) => file.url);
-      data.mediaTypes = res.map((file) => file.type);
+        data.longPost.content = data.longPost.content.map((c, index) => ({
+          ...c,
+          media: [contents[index].url],
+          mediaTypes: [contents[index].type],
+        }));
+      } catch (error) {
+        console.error('Error uploading files:', error);
+        throw new Error('Failed to process long post media.');
+      }
     }
+    const createData: Prisma.PostCreateInput = {
+      ...data,
+      author: { connect: { email } },
+      longPost:
+        data.longPost && data.longPost.content.length > 0
+          ? {
+              create: {
+                content: {
+                  createMany: {
+                    data: data.longPost.content.map((c) => ({
+                      text: c.text,
+                      media: c.media,
+                      mediaTypes: c.mediaTypes,
+                    })),
+                    skipDuplicates: true,
+                  },
+                },
+              },
+            }
+          : undefined,
+
+      published,
+    };
 
     const post = await this.prisma.post.create({
-      data,
+      data: createData,
+      include: {
+        likedBy: true,
+        bookmarkedBy: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+          },
+        },
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
+      },
     });
 
     if (fileIds.length > 0) await this.fileService.markFileAsUploaded(fileIds);
 
-    const p = this.updatePost({
-      where: { id: post.id },
-      data: {
-        published: true,
-      },
-      email,
-    });
-
     if (post.parentId)
       this.incrementParentPostCommentCount(post.parentId, email);
 
-    return p;
+    return post;
   }
 
   async findParentPost(postId: string): Promise<Post | null> {
@@ -85,7 +123,23 @@ export class PostService {
   async findPost(postId: string, email: string): Promise<Post | null> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      include: { likedBy: true, bookmarkedBy: true, author: true },
+      include: {
+        likedBy: true,
+        bookmarkedBy: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+          },
+        },
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
+      },
     });
 
     if (!post) {
@@ -108,9 +162,21 @@ export class PostService {
       where: { id: postId },
       include: {
         comments: true,
-        author: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+          },
+        },
         likedBy: true,
         bookmarkedBy: true,
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
       },
     });
 
@@ -164,7 +230,23 @@ export class PostService {
       cursor,
       where,
       orderBy,
-      include: { likedBy: true, bookmarkedBy: true, author: true },
+      include: {
+        likedBy: true,
+        bookmarkedBy: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+          },
+        },
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
+      },
     });
 
     const postsWithUserFlags = posts.map((post) => {
@@ -194,7 +276,23 @@ export class PostService {
     const post = await this.prisma.post.update({
       data,
       where,
-      include: { likedBy: true, bookmarkedBy: true, author: true },
+      include: {
+        likedBy: true,
+        bookmarkedBy: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+          },
+        },
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
+      },
     });
 
     const postWithUserFlags = {
