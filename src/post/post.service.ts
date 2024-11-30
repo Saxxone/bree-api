@@ -27,7 +27,7 @@ export class PostService {
       try {
         const contents = await Promise.all(
           data.longPost.content.map(async (c) => {
-            const res = await this.fileService.getFilesUrls(c.media); // Assuming getFilesUrls expects an array
+            const res = await this.fileService.getFilesUrls(c.media);
             return res[0];
           }),
         );
@@ -88,6 +88,11 @@ export class PostService {
     });
 
     if (fileIds.length > 0) await this.fileService.markFileAsUploaded(fileIds);
+    if (data.type === PostType.LONG) {
+      data.longPost.content.forEach(async (c) => {
+        await this.fileService.markFileAsUploaded(c.media);
+      });
+    }
 
     if (post.parentId)
       this.incrementParentPostCommentCount(post.parentId, email);
