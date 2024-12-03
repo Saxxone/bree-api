@@ -16,7 +16,7 @@ export class PostService {
     published: boolean,
     email: string,
   ): Promise<Post> {
-    const fileIds = data.media as string[];
+    const fileIds = data.media;
 
     if (fileIds.length > 0 && data.type === PostType.SHORT) {
       const res = await this.fileService.getFilesUrls(data.media as any);
@@ -87,11 +87,16 @@ export class PostService {
       },
     });
 
+    //Mark uploaded for short posts
     if (fileIds.length > 0) await this.fileService.markFileAsUploaded(fileIds);
+
+    //Mark uploaded for long posts
     if (data.type === PostType.LONG) {
-      data.longPost.content.forEach(async (c) => {
-        await this.fileService.markFileAsUploaded(c.media);
-      });
+      await Promise.all(
+        data.longPost.content.map(async (c) => {
+          await this.fileService.markFileAsUploaded(c.media);
+        }),
+      );
     }
 
     if (post.parentId)
