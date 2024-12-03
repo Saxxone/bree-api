@@ -17,8 +17,9 @@ export class PostService {
     email: string,
   ): Promise<Post> {
     const fileIds = data.media;
+    const clone = data.longPost?.content;
 
-    if (fileIds.length > 0 && data.type === PostType.SHORT) {
+    if (fileIds.length > 0 && data.type !== PostType.LONG) {
       const res = await this.fileService.getFilesUrls(data.media as any);
       data.media = res.map((file) => file.url);
       data.mediaTypes = res.map((file) => file.type);
@@ -91,9 +92,9 @@ export class PostService {
     if (fileIds.length > 0) await this.fileService.markFileAsUploaded(fileIds);
 
     //Mark uploaded for long posts
-    if (data.type === PostType.LONG) {
+    if (data.type === PostType.LONG && clone.length > 0) {
       await Promise.all(
-        data.longPost.content.map(async (c) => {
+        clone.map(async (c) => {
           await this.fileService.markFileAsUploaded(c.media);
         }),
       );
