@@ -10,8 +10,6 @@ export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findUser(usernameOrEmail: string): Promise<User | null> {
-   
-
     const searchTerm = usernameOrEmail.startsWith('@')
       ? usernameOrEmail
       : `@${usernameOrEmail}`;
