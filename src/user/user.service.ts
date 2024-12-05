@@ -9,12 +9,21 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findUser(usernameOrEmail: string): Promise<User | null> {
+  async findUser(
+    usernameOrEmail: string,
+    withPassword: boolean = false,
+  ): Promise<User | null> {
     const searchTerm = usernameOrEmail.startsWith('@')
       ? usernameOrEmail
       : `@${usernameOrEmail}`;
 
     const user = await this.prisma.user.findFirst({
+      ...(withPassword && {
+        select: {
+          password: withPassword,
+        },
+      }),
+
       where: {
         OR: [
           { username: searchTerm },
@@ -25,7 +34,7 @@ export class UserService {
     });
 
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return user as User;
   }
 
   async getMultipleUsers(params: {

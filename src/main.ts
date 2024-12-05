@@ -3,7 +3,6 @@ import { AppModule } from './app.module';
 import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
 import helmet from 'helmet';
 import { ui_base_url } from 'utils';
-import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

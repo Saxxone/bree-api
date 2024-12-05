@@ -25,12 +25,12 @@ export class AuthService {
   ) {}
 
   async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
-    const user = await this.userService.findUser(email);
+    const user = await this.userService.findUser(email, true);
 
     if (!user) {
       throw new UnauthorizedException();
     }
-
+    console.log(user.password, pass);
     const isPasswordValid = await bcrypt.compare(pass, user.password);
 
     if (!isPasswordValid) {
