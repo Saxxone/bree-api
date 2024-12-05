@@ -91,6 +91,7 @@ export class AuthService {
 
       return {
         ...user,
+        username: payload.email.split('@')[0], //set default username for user
         access_token: await this.jwtService.signAsync(data, {
           secret: jwtConstants.secret,
         }),
