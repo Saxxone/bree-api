@@ -249,6 +249,7 @@ export class PostService {
             id: true,
             name: true,
             img: true,
+            username: true,
           },
         },
         longPost: {
