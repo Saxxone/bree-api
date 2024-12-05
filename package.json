@@ -27,7 +27,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force",
     "prepare": "husky",
-    "docs": "npx @compodoc/compodoc -p tsconfig.json -s"
+    "doc": "npx compodoc -p tsconfig.json -s -n \"Bree API documentation\""
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.3",

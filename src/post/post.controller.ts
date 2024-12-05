@@ -125,6 +125,9 @@ export class PostController {
     );
   }
 
+  /**
+   * @returns post feed in descending order based on the skip and take values
+   */
   @Post('feed')
   async getPublishedPosts(
     @Request() req: any,
@@ -142,9 +145,13 @@ export class PostController {
     });
   }
 
+  /**
+   * @param {{id: string}} params the id of the user whose posts should be returned
+   * @returns post feed in descending order based on the skip and take values and the user id
+   */
   @Get('user/:id/posts')
   async getUserPosts(
-    @Param() params: any,
+    @Param() params: { id: string },
     @Request() req: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,

@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
 import helmet from 'helmet';
 import { ui_base_url } from 'utils';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,16 +18,16 @@ async function bootstrap() {
 
   app.useGlobalFilters(new ExceptionsLoggerFilter());
 
-  //TODO enable gaurds and do not require auth for public routes
-  // app.useGlobalPipes(
-  //   new ValidationPipe({
-  //     disableErrorMessages: true,
-  //     transform: true,
-  //     whitelist: true,
-  //     enableDebugMessages: true, //only use in development
-  //     stopAtFirstError: true,
-  //   }),
-  // );
+//Use DTOs (defined by class validators) in controllers to enforce validation rules 
+  app.useGlobalPipes(
+    new ValidationPipe({
+      disableErrorMessages: false, //todo only use in development
+      transform: true,
+      whitelist: true,
+      enableDebugMessages: true, //todo only use in development
+      stopAtFirstError: true,
+    }),
+  );
 
   app.use(helmet());
 
