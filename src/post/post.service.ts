@@ -195,8 +195,12 @@ export class PostService {
       ...post,
       author: post.author,
 
-      likedByMe: post.likedBy.some((user) => user.email === email),
-      bookmarkedByMe: post.bookmarkedBy.some((user) => user.email === email),
+      likedByMe: email
+        ? post.likedBy.some((user) => user.email === email)
+        : false,
+      bookmarkedByMe: email
+        ? post.bookmarkedBy.some((user) => user.email === email)
+        : false,
     };
 
     return postWithUserFlags;
@@ -232,7 +236,7 @@ export class PostService {
     cursor?: Prisma.PostWhereUniqueInput;
     where?: Prisma.PostWhereInput;
     orderBy?: Prisma.PostOrderByWithRelationInput;
-    currentUserEmail: string;
+    currentUserEmail?: string;
   }): Promise<Post[]> {
     const { skip, take, cursor, where, orderBy } = params;
     const posts = await this.prisma.post.findMany({
@@ -266,12 +270,14 @@ export class PostService {
         ...post,
         author: post.author,
 
-        likedByMe: post.likedBy.some(
-          (user) => user.email === params.currentUserEmail,
-        ),
-        bookmarkedByMe: post.bookmarkedBy.some(
-          (user) => user.email === params.currentUserEmail,
-        ),
+        likedByMe: params.currentUserEmail
+          ? post.likedBy.some((user) => user.email === params.currentUserEmail)
+          : false,
+        bookmarkedByMe: params.currentUserEmail
+          ? post.bookmarkedBy.some(
+              (user) => user.email === params.currentUserEmail,
+            )
+          : false,
       };
     });
 

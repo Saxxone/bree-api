@@ -18,16 +18,16 @@ async function bootstrap() {
 
   app.useGlobalFilters(new ExceptionsLoggerFilter());
 
-//Use DTOs (defined by class validators) in controllers to enforce validation rules 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      disableErrorMessages: false, //todo only use in development
-      transform: true,
-      whitelist: true,
-      enableDebugMessages: true, //todo only use in development
-      stopAtFirstError: true,
-    }),
-  );
+  //Use DTOs (defined by class validators) in controllers to enforce validation rules
+  // app.useGlobalPipes(
+  //   new ValidationPipe({
+  //     disableErrorMessages: false, //todo only use in development
+  //     transform: true,
+  //     whitelist: true,
+  //     enableDebugMessages: true, //todo only use in development
+  //     stopAtFirstError: true,
+  //   }),
+  // );
 
   app.use(helmet());
 

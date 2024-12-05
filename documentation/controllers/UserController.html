@@ -650,8 +650,8 @@ export class UserController {
   ): Promise&lt;UserModel[]&gt; {
     console.log(&#x27;SEARCH:::&#x27;, searchString);
     return this.userService.getMultipleUsers({
-      skip: Number(skip),
-      take: Number(take),
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
       orderBy: {
         createdAt: &#x27;desc&#x27;,
       },

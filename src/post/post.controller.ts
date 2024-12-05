@@ -12,6 +12,7 @@ import {
 import { PostService } from './post.service';
 import { Post as PostModel } from '@prisma/client';
 import { CreatePostDto } from './dto/create-post.dto';
+import { Public } from 'src/auth/auth.guard';
 
 @Controller('posts')
 export class PostController {
@@ -82,12 +83,13 @@ export class PostController {
     return await this.postService.likePost(id, req.user.sub);
   }
 
+  @Public()
   @Get('/:id')
   async getPostById(
     @Param('id') id: string,
     @Request() req: any,
   ): Promise<PostModel> {
-    return await this.postService.viewSinglePost(id, req.user.sub);
+    return await this.postService.viewSinglePost(id, req.user?.sub);
   }
 
   @Get('/comments/:id')
@@ -97,7 +99,7 @@ export class PostController {
   ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
       where: { parent: { id: id } },
-      currentUserEmail: req.user.sub,
+      currentUserEmail: req.user?.sub,
     });
   }
 
@@ -128,6 +130,7 @@ export class PostController {
   /**
    * @returns post feed in descending order based on the skip and take values
    */
+  @Public()
   @Post('feed')
   async getPublishedPosts(
     @Request() req: any,
@@ -139,30 +142,30 @@ export class PostController {
       orderBy: {
         createdAt: 'desc',
       },
-      skip: Number(skip),
-      take: Number(take),
-      currentUserEmail: req.user.sub,
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
+      currentUserEmail: req.user?.sub,
     });
   }
 
   /**
-   * @param {{id: string}} params the id of the user whose posts should be returned
+   * @param {string} id the id of the user whose posts should be returned
    * @returns post feed in descending order based on the skip and take values and the user id
    */
   @Get('user/:id/posts')
   async getUserPosts(
-    @Param() params: { id: string },
+    @Param('id') id: string,
     @Request() req: any,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<PostModel[]> {
     return await this.postService.getMultiplePosts({
-      where: { published: true, author: { id: params.id } },
+      where: { published: true, author: { id } },
       orderBy: {
         createdAt: 'desc',
       },
-      skip: Number(skip),
-      take: Number(take),
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
       currentUserEmail: req.user.sub,
     });
   }

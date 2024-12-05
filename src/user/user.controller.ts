@@ -39,8 +39,8 @@ export class UserController {
   ): Promise<UserModel[]> {
     console.log('SEARCH:::', searchString);
     return this.userService.getMultipleUsers({
-      skip: Number(skip),
-      take: Number(take),
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
       orderBy: {
         createdAt: 'desc',
       },

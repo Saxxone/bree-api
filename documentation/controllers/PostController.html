@@ -1585,8 +1585,8 @@ export class PostController {
       orderBy: {
         createdAt: &#x27;desc&#x27;,
       },
-      skip: Number(skip),
-      take: Number(take),
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
       currentUserEmail: req.user.sub,
     });
   }
@@ -1607,8 +1607,8 @@ export class PostController {
       orderBy: {
         createdAt: &#x27;desc&#x27;,
       },
-      skip: Number(skip),
-      take: Number(take),
+      skip: Number(skip) || 0,
+      take: Number(take) || 10,
       currentUserEmail: req.user.sub,
     });
   }
