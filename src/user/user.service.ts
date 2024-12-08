@@ -21,6 +21,13 @@ export class UserService {
       ...(withPassword && {
         select: {
           password: withPassword,
+          id: true,
+          email: true,
+          username: true,
+          img: true,
+          publicKey: true,
+          bio: true,
+          verified: true,
         },
       }),
 
