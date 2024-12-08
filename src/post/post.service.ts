@@ -168,7 +168,7 @@ export class PostService {
     return postWithUserFlags;
   }
 
-  async viewSinglePost(postId: string, email): Promise<Post> {
+  async viewSinglePost(postId: string, email: string): Promise<Post> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
       include: {
@@ -190,7 +190,7 @@ export class PostService {
         },
       },
     });
-
+    console.log(email);
     const postWithUserFlags = {
       ...post,
       author: post.author,

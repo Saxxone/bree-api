@@ -89,6 +89,7 @@ export class PostController {
     @Param('id') id: string,
     @Request() req: any,
   ): Promise<PostModel> {
+    console.log(req.user);
     return await this.postService.viewSinglePost(id, req.user?.sub);
   }
 

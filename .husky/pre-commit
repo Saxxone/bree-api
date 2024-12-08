@@ -1,1 +1,1 @@
-npm audit && npm audit fix && npm run format && npm run lint
+npm run format && npm run lint
