@@ -25,7 +25,7 @@ export class AuthService {
   ) {}
 
   async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
-    const user = await this.userService.findUser(email, true);
+    const user = await this.userService.findUser(email, {withPassword: true});
 
     if (!user) {
       throw new UnauthorizedException();
@@ -37,7 +37,7 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    delete user.password;
+    if (user.password) delete user.password;
 
     const payload = { sub: user.email, username: user.username };
 
@@ -50,7 +50,7 @@ export class AuthService {
   }
 
   async signOut(email: string, pass: string): Promise<any> {
-    const user = await this.userService.findUser(email);
+    const user = await this.userService.findUser(email, {withPassword: true});
 
     if (!user) {
       throw new UnauthorizedException();
@@ -70,7 +70,9 @@ export class AuthService {
   async signInGoogle(token: string): Promise<Partial<AuthUser>> {
     const payload: GoogleAuthUser = await this.jwtService.decode(token);
 
-    const user = await this.userService.findUser(payload.email);
+    const user = await this.userService.findUser(payload.email, {
+      withPassword: true,
+    });
 
     const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
     const default_img = process.env.DEFAULT_PROFILE_IMG;
@@ -87,11 +89,10 @@ export class AuthService {
       return await this.updateUserProfile(user, payload, default_img);
     } else {
       const data = { sub: user.email, username: user.username };
-      delete user.password;
+      if (user.password) delete user.password;
 
       return {
         ...user,
-        username: payload.email.split('@')[0], //set default username for user
         access_token: await this.jwtService.signAsync(data, {
           secret: jwtConstants.secret,
         }),
@@ -101,6 +102,8 @@ export class AuthService {
 
   async signUpGoogle(token: string): Promise<Partial<AuthUser>> {
     const payload: GoogleAuthUser = await this.jwtService.decode(token);
+
+    let img_url = process.env.DEFAULT_PROFILE_IMG;
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -117,50 +120,34 @@ export class AuthService {
     if (client_id !== payload.aud) {
       throw new UnauthorizedException();
     }
+
     try {
       const { url, file } = this.createImgPath();
       await this.downloadImage(payload.picture, file);
-
-      const u: CreateFedUserDto = {
-        name: payload.name,
-        username: payload.email,
-        email: payload.email,
-        img: url,
-      };
-
-      const new_user = await this.userService.createFedUser(u);
-
-      const data = { sub: new_user.email, username: new_user.username };
-      delete user.password;
-
-      return {
-        ...user,
-        access_token: await this.jwtService.signAsync(data, {
-          secret: jwtConstants.secret,
-        }),
-      };
+      img_url = url;
     } catch (error) {
-      if (!error) return;
-      const default_img = process.env.DEFAULT_PROFILE_IMG;
-      const u: CreateFedUserDto = {
-        name: payload.name,
-        username: payload.email,
-        email: payload.email,
-        img: default_img,
-      };
-
-      const new_user = await this.userService.createFedUser(u);
-
-      delete new_user.password;
-      const data = { sub: new_user.email, username: new_user.username };
-
-      return {
-        ...new_user,
-        access_token: await this.jwtService.signAsync(data, {
-          secret: jwtConstants.secret,
-        }),
-      };
+      console.error('Error downloading or saving image:', error);
     }
+
+    const u: CreateFedUserDto = {
+      name: payload.name,
+      username: payload.email.split('@')[0], 
+      email: payload.email,
+      img: img_url,
+    };
+
+    const new_user = await this.userService.createFedUser(u);
+
+    const data = { sub: new_user.email, username: new_user.username };
+
+    if (new_user.password) delete new_user.password;
+
+    return {
+      ...new_user,
+      access_token: await this.jwtService.signAsync(data, {
+        secret: jwtConstants.secret,
+      }),
+    };
   }
 
   private async updateUserProfile(
@@ -177,7 +164,7 @@ export class AuthService {
           data: { img: url },
         });
 
-        delete updated_user.password;
+        if (updated_user.password) delete updated_user.password;
 
         const data = {
           sub: updated_user.email,
@@ -193,7 +180,7 @@ export class AuthService {
       } catch (error) {
         console.error('Error downloading or saving image:', error);
 
-        delete user.password;
+        if (user.password) delete user.password;
         const data = { sub: user.email, username: user.username };
         return {
           ...user,
@@ -215,19 +202,24 @@ export class AuthService {
   }
 
   private async downloadImage(url: string, filepath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(filepath);
-      https
-        .get(url, (response) => {
-          response.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            resolve();
+    try {
+      return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(filepath);
+        https
+          .get(url, (response) => {
+            response.pipe(file);
+            file.on('finish', () => {
+              file.close();
+              resolve();
+            });
+          })
+          .on('error', (err) => {
+            fs.unlink(filepath, () => reject(err));
           });
-        })
-        .on('error', (err) => {
-          fs.unlink(filepath, () => reject(err));
-        });
-    });
+      });
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      throw error;
+    }
   }
 }

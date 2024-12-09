@@ -33,11 +33,12 @@ export class UserController {
 
   @Post('/search')
   async getFilteredUsers(
-    @Query('q') searchString: string,
+    @Query('q') search_string: string,
+    @Query('with_pk') with_pk?: boolean,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
-  ): Promise<UserModel[]> {
-    console.log('SEARCH:::', searchString);
+  ): Promise<Partial<UserModel>[]> {
+    console.log('SEARCH:::', search_string);
     return this.userService.getMultipleUsers({
       skip: Number(skip) || 0,
       take: Number(take) || 10,
@@ -47,14 +48,14 @@ export class UserController {
       where: {
         OR: [
           {
-            name: { contains: searchString },
+            name: { contains: search_string },
           },
           {
-            username: { contains: searchString },
+            username: { contains: search_string },
           },
         ],
       },
-    });
+    }, with_pk);
   }
 
   @Put('update/:id')

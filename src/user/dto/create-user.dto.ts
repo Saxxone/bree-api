@@ -59,4 +59,6 @@ export class CreateFedUserDto {
   @Allow()
   @IsString()
   banner?: string;
+
+  publicKey?: string;
 }

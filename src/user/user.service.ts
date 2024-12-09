@@ -11,16 +11,19 @@ export class UserService {
 
   async findUser(
     usernameOrEmail: string,
-    withPassword: boolean = false,
+    options?: {
+      withPassword?: boolean;
+      withPublicKey?: boolean;
+    }
   ): Promise<User | null> {
     const searchTerm = usernameOrEmail.startsWith('@')
       ? usernameOrEmail
       : `@${usernameOrEmail}`;
 
     const user = await this.prisma.user.findFirst({
-      ...(withPassword && {
+      ...(options?.withPassword && {
         select: {
-          password: withPassword,
+          password: options?.withPassword,
           id: true,
           email: true,
           username: true,
@@ -50,7 +53,7 @@ export class UserService {
     cursor?: Prisma.UserWhereUniqueInput;
     where?: Prisma.UserWhereInput;
     orderBy?: Prisma.UserOrderByWithRelationInput;
-  }): Promise<User[]> {
+  }, with_pk?: boolean): Promise<Partial<User>[]> {
     const { skip, take, cursor, where, orderBy } = params;
     return this.prisma.user.findMany({
       skip,
@@ -58,6 +61,16 @@ export class UserService {
       cursor,
       where,
       orderBy,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        img: true,
+        bio: true,
+        verified: true,
+
+        ...(with_pk && { publicKey: true }), // Include publicKey only if with_pk is true
+      }
     });
   }
 
@@ -76,7 +89,7 @@ export class UserService {
   }
 
   async createFedUser(data: CreateFedUserDto): Promise<User> {
-    return this.prisma.user.create({ data });
+    return await this.prisma.user.create({ data });
   }
 
   async updateUser(params: {

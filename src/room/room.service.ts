@@ -42,7 +42,16 @@ export class RoomService {
         },
       },
       include: {
-        participants: true,
+        participants: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            img: true,
+            verified: true,
+            publicKey: true, 
+          },
+        },
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
