@@ -7,6 +7,7 @@ import {
   Delete,
   Request,
   Query,
+  Post,
 } from '@nestjs/common';
 import { RoomService } from './room.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -25,7 +26,7 @@ export class RoomController {
     return this.roomService.findOne(id);
   }
 
-  @Get('/find-create/')
+  @Post('/find-create')
   findRoomByParticipantsOrCreate(
     @Query('user1') user1Id: string,
     @Query('user2') user2Id: string,

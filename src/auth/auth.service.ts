@@ -25,7 +25,7 @@ export class AuthService {
   ) {}
 
   async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
-    const user = await this.userService.findUser(email, {withPassword: true});
+    const user = await this.userService.findUser(email, { withPassword: true });
 
     if (!user) {
       throw new UnauthorizedException();
@@ -50,7 +50,7 @@ export class AuthService {
   }
 
   async signOut(email: string, pass: string): Promise<any> {
-    const user = await this.userService.findUser(email, {withPassword: true});
+    const user = await this.userService.findUser(email, { withPassword: true });
 
     if (!user) {
       throw new UnauthorizedException();
@@ -131,7 +131,7 @@ export class AuthService {
 
     const u: CreateFedUserDto = {
       name: payload.name,
-      username: payload.email.split('@')[0], 
+      username: payload.email.split('@')[0],
       email: payload.email,
       img: img_url,
     };

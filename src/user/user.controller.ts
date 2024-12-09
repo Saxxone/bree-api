@@ -39,23 +39,26 @@ export class UserController {
     @Query('take') take?: number,
   ): Promise<Partial<UserModel>[]> {
     console.log('SEARCH:::', search_string);
-    return this.userService.getMultipleUsers({
-      skip: Number(skip) || 0,
-      take: Number(take) || 10,
-      orderBy: {
-        createdAt: 'desc',
+    return this.userService.getMultipleUsers(
+      {
+        skip: Number(skip) || 0,
+        take: Number(take) || 10,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        where: {
+          OR: [
+            {
+              name: { contains: search_string },
+            },
+            {
+              username: { contains: search_string },
+            },
+          ],
+        },
       },
-      where: {
-        OR: [
-          {
-            name: { contains: search_string },
-          },
-          {
-            username: { contains: search_string },
-          },
-        ],
-      },
-    }, with_pk);
+      with_pk,
+    );
   }
 
   @Put('update/:id')

@@ -49,7 +49,7 @@ export class RoomService {
             username: true,
             img: true,
             verified: true,
-            publicKey: true, 
+            publicKey: true,name: true
           },
         },
         chats: {
@@ -74,7 +74,6 @@ export class RoomService {
   async joinRoom(
     roomId: string,
     userId: string,
-    // publicKey: ArrayBuffer,
   ): Promise<boolean> {
     try {
       const user = await this.userService.findUser(userId);
@@ -109,7 +108,16 @@ export class RoomService {
         id,
       },
       include: {
-        participants: true,
+        participants: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            img: true,
+            verified: true,
+            publicKey: true,name: true
+          },
+        },
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
@@ -124,7 +132,11 @@ export class RoomService {
     user2Id: string,
   ): Promise<Room> {
     const user1 = await this.userService.findUser(user1Id);
+
     const user2 = await this.userService.findUser(user2Id);
+
+
+
 
     if (!user1 || !user2) {
       throw new NotFoundException('User not found');
@@ -137,13 +149,25 @@ export class RoomService {
         },
       },
       include: {
-        participants: true,
+        participants: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            img: true,
+            verified: true,
+            publicKey: true,name: true
+          },
+        },
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
         },
       },
     });
+
+    console.log(existingRoom);
+
 
     if (existingRoom) {
       return existingRoom;

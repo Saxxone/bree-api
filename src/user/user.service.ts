@@ -14,7 +14,7 @@ export class UserService {
     options?: {
       withPassword?: boolean;
       withPublicKey?: boolean;
-    }
+    },
   ): Promise<User | null> {
     const searchTerm = usernameOrEmail.startsWith('@')
       ? usernameOrEmail
@@ -47,13 +47,16 @@ export class UserService {
     return user as User;
   }
 
-  async getMultipleUsers(params: {
-    skip?: number;
-    take?: number;
-    cursor?: Prisma.UserWhereUniqueInput;
-    where?: Prisma.UserWhereInput;
-    orderBy?: Prisma.UserOrderByWithRelationInput;
-  }, with_pk?: boolean): Promise<Partial<User>[]> {
+  async getMultipleUsers(
+    params: {
+      skip?: number;
+      take?: number;
+      cursor?: Prisma.UserWhereUniqueInput;
+      where?: Prisma.UserWhereInput;
+      orderBy?: Prisma.UserOrderByWithRelationInput;
+    },
+    with_pk?: boolean,
+  ): Promise<Partial<User>[]> {
     const { skip, take, cursor, where, orderBy } = params;
     return this.prisma.user.findMany({
       skip,
@@ -70,7 +73,7 @@ export class UserService {
         verified: true,
 
         ...(with_pk && { publicKey: true }), // Include publicKey only if with_pk is true
-      }
+      },
     });
   }
 
