@@ -38,7 +38,6 @@ export class UserController {
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<Partial<UserModel>[]> {
-    console.log('SEARCH:::', search_string);
     return this.userService.getMultipleUsers(
       {
         skip: Number(skip) || 0,

@@ -41,7 +41,6 @@ export class PostController {
     @Request() req: any,
     @Body() postData: CreatePostDto,
   ): Promise<PostModel> {
-    console.log(postData);
     return await this.postService.createPost(
       {
         ...postData,

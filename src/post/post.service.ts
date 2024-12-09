@@ -190,7 +190,6 @@ export class PostService {
         },
       },
     });
-    console.log(email);
     const postWithUserFlags = {
       ...post,
       author: post.author,
