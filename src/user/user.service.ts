@@ -65,9 +65,9 @@ export class UserService {
       cursor,
       where: {
         ...where,
-        NOT: {  
-          email
-        }
+        NOT: {
+          email,
+        },
       },
       orderBy,
       select: {
@@ -80,7 +80,6 @@ export class UserService {
 
         ...(with_pk && { publicKey: true }),
       },
-    
     });
   }
 

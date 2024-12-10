@@ -53,7 +53,7 @@ export class UserController {
               name: { contains: encodeURIComponent(search_string.trim()) },
             },
             {
-              username: { contains: encodeURIComponent(search_string.trim())  },
+              username: { contains: encodeURIComponent(search_string.trim()) },
             },
           ],
         },
