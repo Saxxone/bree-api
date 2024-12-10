@@ -55,6 +55,7 @@ export class UserService {
       where?: Prisma.UserWhereInput;
       orderBy?: Prisma.UserOrderByWithRelationInput;
     },
+    email: string,
     with_pk?: boolean,
   ): Promise<Partial<User>[]> {
     const { skip, take, cursor, where, orderBy } = params;
@@ -62,7 +63,12 @@ export class UserService {
       skip,
       take,
       cursor,
-      where,
+      where: {
+        ...where,
+        NOT: {  
+          email
+        }
+      },
       orderBy,
       select: {
         id: true,
@@ -72,8 +78,9 @@ export class UserService {
         bio: true,
         verified: true,
 
-        ...(with_pk && { publicKey: true }), // Include publicKey only if with_pk is true
+        ...(with_pk && { publicKey: true }),
       },
+    
     });
   }
 

@@ -56,6 +56,9 @@ export class RoomService {
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
+          include: {
+            userEncryptedMessages: true,
+          }
         },
       },
     });
@@ -141,7 +144,8 @@ export class RoomService {
     const existingRoom = await this.prisma.room.findFirst({
       where: {
         participants: {
-          every: { id: { in: [user1Id, user2Id] } },
+          some: { id: user1Id },
+          every: { id: user2Id }, 
         },
       },
       include: {
@@ -163,6 +167,7 @@ export class RoomService {
       },
     });
 
+    console.log(existingRoom);
     if (existingRoom) {
       return existingRoom;
     }

@@ -7,6 +7,7 @@ import {
   Put,
   Delete,
   Query,
+  Request,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User, User as UserModel } from '@prisma/client';
@@ -34,6 +35,7 @@ export class UserController {
   @Post('/search')
   async getFilteredUsers(
     @Query('q') search_string: string,
+    @Request() req: any,
     @Query('with_pk') with_pk?: boolean,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
@@ -48,15 +50,46 @@ export class UserController {
         where: {
           OR: [
             {
-              name: { contains: search_string },
+              name: { contains: encodeURIComponent(search_string.trim()) },
             },
             {
-              username: { contains: search_string },
+              username: { contains: encodeURIComponent(search_string.trim())  },
             },
           ],
         },
       },
+      req.user.sub,
       with_pk,
+    );
+  }
+
+  @Post('/global-search')
+  async searchUsersAndPosts(
+    @Query() query: Record<string, any>,
+    @Request() req: any,
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+  ): Promise<Partial<UserModel>[]> {
+    return this.userService.getMultipleUsers(
+      {
+        skip: Number(skip) || 0,
+        take: Number(take) || 10,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        where: {
+          OR: [
+            // {
+            //   name: { search: search_string },
+            // },
+            // {
+            //   username: { search: search_string },
+            // },
+          ],
+        },
+      },
+      req.user.sub,
+      false,
     );
   }
 
