@@ -58,7 +58,7 @@ export class RoomService {
           orderBy: { createdAt: 'desc' },
           include: {
             userEncryptedMessages: true,
-          }
+          },
         },
       },
     });
@@ -145,7 +145,7 @@ export class RoomService {
       where: {
         participants: {
           some: { id: user1Id },
-          every: { id: user2Id }, 
+          every: { id: user2Id },
         },
       },
       include: {
