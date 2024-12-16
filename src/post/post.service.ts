@@ -43,8 +43,10 @@ export class PostService {
         throw new Error('Failed to process long post media.');
       }
     }
+    const { parentId, ...rest } = data;
     const createData: Prisma.PostCreateInput = {
-      ...data,
+      parent: parentId ? { connect: { id: parentId } } : undefined,
+      ...rest,
       author: { connect: { email } },
       longPost:
         data.longPost && data.longPost.content.length > 0
@@ -131,48 +133,11 @@ export class PostService {
     });
   }
 
-  async findPost(postId: string, email: string): Promise<Post | null> {
-    const post = await this.prisma.post.findUnique({
-      where: { id: postId },
-      include: {
-        likedBy: true,
-        bookmarkedBy: true,
-        author: {
-          select: {
-            id: true,
-            name: true,
-            img: true,
-          },
-        },
-        longPost: {
-          select: {
-            id: true,
-            content: true,
-          },
-        },
-      },
-    });
-
-    if (!post) {
-      throw new NotFoundException('Post not found');
-    }
-
-    const postWithUserFlags = {
-      ...post,
-      author: post.author,
-
-      likedByMe: post.likedBy.some((user) => user.email === email),
-      bookmarkedByMe: post.bookmarkedBy.some((user) => user.email === email),
-    };
-
-    return postWithUserFlags;
-  }
-
   async viewSinglePost(postId: string, email: string): Promise<Post> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
       include: {
-        comments: true,
+        comments: false,
         author: {
           select: {
             id: true,

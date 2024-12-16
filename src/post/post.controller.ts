@@ -159,8 +159,12 @@ export class PostController {
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<PostModel[]> {
+    const searchTerm = id.startsWith('@') ? id.substring(1) : id;
     return await this.postService.getMultiplePosts({
-      where: { published: true, author: { id } },
+      where: {
+        published: true,
+        author: { OR: [{ username: searchTerm }, { email: id }, { id: id }] },
+      },
       orderBy: {
         createdAt: 'desc',
       },

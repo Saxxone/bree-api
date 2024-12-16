@@ -17,8 +17,10 @@ export class UserService {
     },
   ): Promise<User | null> {
     const searchTerm = usernameOrEmail.startsWith('@')
-      ? usernameOrEmail
-      : `@${usernameOrEmail}`;
+      ? usernameOrEmail.substring(1)
+      : usernameOrEmail;
+
+
 
     const user = await this.prisma.user.findFirst({
       ...(options?.withPassword && {
