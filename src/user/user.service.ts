@@ -20,8 +20,6 @@ export class UserService {
       ? usernameOrEmail.substring(1)
       : usernameOrEmail;
 
-
-
     const user = await this.prisma.user.findFirst({
       ...(options?.withPassword && {
         select: {

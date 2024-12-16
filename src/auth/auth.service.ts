@@ -131,7 +131,7 @@ export class AuthService {
 
     const u: CreateFedUserDto = {
       name: payload.name,
-      username: '@'+payload.email.split('@')[0],
+      username: '@' + payload.email.split('@')[0],
       email: payload.email,
       img: img_url,
     };
