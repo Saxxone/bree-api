@@ -7,7 +7,6 @@ import {
   Param,
   Delete,
   UseInterceptors,
-  UploadedFiles,
   Request,
   BadRequestException,
 } from '@nestjs/common';

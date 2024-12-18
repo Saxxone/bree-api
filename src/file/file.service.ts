@@ -77,8 +77,6 @@ export class FileService {
       savedFiles.push(savedFile.id);
     }
 
-    console.log(savedFiles);
-
     return savedFiles;
   }
 
