@@ -72,12 +72,38 @@ export class FileController {
     }),
   )
   @Post('upload')
-  async uploadFile(
-    @UploadedFiles() files: Array<Express.Multer.File>,
-    @Request() req: any,
-  ) {
-    const compressedFiles = await compressFiles(files);
-    return await this.fileService.create(compressedFiles, req.user.sub);
+  async uploadFile(@Request() req: any) {
+    let files: Array<Express.Multer.File> = [];
+    let compressed_fiiles: Array<Express.Multer.File> = [];
+
+    if (req.files) {
+      files = req.files;
+    } else if (req.body?._parts) {
+      const parts = req.body._parts;
+      for (const part of parts) {
+        if (Array.isArray(part) && part[0] === 'app_files') {
+          const multer_file = {
+            fieldname: 'app_files',
+            originalname: part[1].fileName,
+            encoding: '7bit',
+            mimetype: part[1].mimeType,
+            size: part[1].fileSize,
+            destination: destination,
+            filename: part[1].fileName,
+            path: part[1].uri,
+          } as Express.Multer.File;
+
+          files.push(multer_file);
+        }
+      }
+    }
+    if (files.length === 0) {
+      throw new BadRequestException('No files found.');
+    }
+
+    compressed_fiiles = await compressFiles(files);
+
+    return await this.fileService.create(compressed_fiiles, req.user.sub);
   }
 
   @Get()
