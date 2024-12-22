@@ -102,7 +102,10 @@ export class FileController {
             await fsasync.writeFile(path, file_data);
             files.push(multer_file);
           } catch (error) {
-            throw new BadRequestException('Failed to process uploaded file.');
+            throw new BadRequestException(
+              error,
+              'Failed to process uploaded file.',
+            );
           }
         }
       }

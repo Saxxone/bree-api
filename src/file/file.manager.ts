@@ -85,7 +85,7 @@ export async function compressImage(file: Express.Multer.File) {
         return;
     }
 
-    await fs.writeFile(file.path, compressedImageBuffer); 
+    await fs.writeFile(file.path, compressedImageBuffer);
   } catch (error) {
     console.error(`Error compressing image ${file.originalname}:`, error);
   }
