@@ -17,6 +17,7 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
 import { compressFiles } from './file.manager';
+import * as fsasync from 'fs/promises';
 
 const destination = join(__dirname, '../../../../', 'media');
 
@@ -81,18 +82,28 @@ export class FileController {
       const parts = req.body._parts;
       for (const part of parts) {
         if (Array.isArray(part) && part[0] === 'app_files') {
-          const multer_file = {
-            fieldname: 'app_files',
-            originalname: part[1].fileName,
-            encoding: '7bit',
-            mimetype: part[1].mimeType,
-            size: part[1].fileSize,
-            destination: destination,
-            filename: part[1].fileName,
-            path: part[1].uri,
-          } as Express.Multer.File;
+          const rn_file = part[1];
+          const path = join(destination, rn_file.fileName);
+          console.log(rn_file);
 
-          files.push(multer_file);
+          try {
+            const multer_file = {
+              buffer: Buffer.from(rn_file.base64, 'base64'),
+              fieldname: 'app_files',
+              originalname: rn_file.fileName,
+              encoding: '7bit',
+              mimetype: rn_file.mimeType,
+              size: rn_file.fileSize,
+              destination: destination,
+              filename: rn_file.fileName,
+              path: path,
+            } as Express.Multer.File;
+            const file_data = Buffer.from(rn_file.base64, 'base64');
+            await fsasync.writeFile(path, file_data);
+            files.push(multer_file);
+          } catch (error) {
+            throw new BadRequestException('Failed to process uploaded file.');
+          }
         }
       }
     }

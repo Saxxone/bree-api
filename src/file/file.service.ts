@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
+import { join } from 'path';
 import { UpdateFileDto } from './dto/update-file.dto';
 
 @Injectable()
@@ -64,7 +65,7 @@ export class FileService {
           filename: file.filename,
           originalname: file.originalname,
           path: file.path,
-          url: `${media_base_url}${file.filename}`,
+          url: join(media_base_url, file.filename),
           mimetype: file.mimetype,
           size: file.size,
           status: Status.PENDING,
