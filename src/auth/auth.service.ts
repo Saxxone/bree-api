@@ -25,6 +25,7 @@ export class AuthService {
   ) {}
 
   async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
+    console.log(email, pass);
     const user = await this.userService.findUser(email, { withPassword: true });
 
     if (!user) {
@@ -131,7 +132,7 @@ export class AuthService {
 
     const u: CreateFedUserDto = {
       name: payload.name,
-      username: '@' + payload.email.split('@')[0],
+      username: payload.email.split('@')[0],
       email: payload.email,
       img: img_url,
     };

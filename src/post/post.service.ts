@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Post, PostType, Prisma } from '@prisma/client';
 import { FileService } from 'src/file/file.service';
@@ -16,6 +20,20 @@ export class PostService {
     published: boolean,
     email: string,
   ): Promise<Post> {
+    const isShortPostEmpty =
+      data.type === PostType.SHORT && !data.text?.length && !data.media?.length;
+    const isLongPostEmpty =
+      data.type === PostType.LONG &&
+      (!data.longPost ||
+        !data.longPost.content ||
+        data.longPost.content.length === 0);
+
+    if (data.type === PostType.SHORT && isShortPostEmpty) {
+      throw new BadRequestException('Short post cannot be empty');
+    } else if (data.type === PostType.LONG && isLongPostEmpty) {
+      throw new BadRequestException('Long post cannot be empty');
+    }
+
     const fileIds = data.media;
     const clone = data.longPost?.content;
 
