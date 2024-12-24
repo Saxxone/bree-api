@@ -17,7 +17,6 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
 import { compressFiles } from './file.manager';
-import * as fsasync from 'fs/promises';
 
 const destination = join(__dirname, '../../../../', 'media');
 
@@ -25,6 +24,7 @@ fs.mkdirSync(destination, { recursive: true });
 
 const allowedMimeTypes = new Set([
   'image/jpeg',
+  'image/heic',
   'image/png',
   'image/webp',
   'video/mp4',
@@ -78,41 +78,9 @@ export class FileController {
 
     if (req.files) {
       files = req.files;
-    } else if (req.body?._parts) {
-      const parts = req.body._parts;
-      for (const part of parts) {
-        if (Array.isArray(part) && part[0] === 'app_files') {
-          const rn_file = part[1];
-          const path = join(destination, rn_file.fileName);
-          console.log(rn_file);
+    }
 
-          try {
-            const multer_file = {
-              buffer: Buffer.from(rn_file.base64, 'base64'),
-              fieldname: 'app_files',
-              originalname: rn_file.fileName,
-              encoding: '7bit',
-              mimetype: rn_file.mimeType,
-              size: rn_file.fileSize,
-              destination: destination,
-              filename: rn_file.fileName,
-              path: path,
-            } as Express.Multer.File;
-            const file_data = Buffer.from(rn_file.base64, 'base64');
-            await fsasync.writeFile(path, file_data);
-            files.push(multer_file);
-          } catch (error) {
-            throw new BadRequestException(
-              error,
-              'Failed to process uploaded file.',
-            );
-          }
-        }
-      }
-    }
-    if (files.length === 0) {
-      throw new BadRequestException('No files found.');
-    }
+    if (files.length === 0) throw new BadRequestException('No files found.');
 
     compressed_fiiles = await compressFiles(files);
 
