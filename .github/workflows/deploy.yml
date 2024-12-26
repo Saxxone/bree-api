@@ -18,7 +18,7 @@ jobs:
           script: |
             cd ~/bree-api
             git pull origin main
-            npm i
+            npm ci
             npm run build
             npx prisma migrate dev
             pm2 restart bree-api
