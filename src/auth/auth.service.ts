@@ -177,45 +177,53 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<{ access_token: string }> {
     try {
-      const refreshTokenPayload: JwtPayload = await this.jwtService.verifyAsync(
-        refreshToken,
-        {
-          secret: jwtConstants.refreshSecret,
-        },
-      );
+      const refreshTokenPayload = await this.verifyRefreshToken(refreshToken);
 
-      const storedRefreshToken = await this.prisma.authToken.findUnique({
-        where: {
-          userId_isRefreshToken: {
-            userId: refreshTokenPayload.userId,
-            isRefreshToken: true,
-          },
-        },
-      });
-
-      if (
-        !storedRefreshToken ||
-        storedRefreshToken.token !== refreshToken ||
-        storedRefreshToken.expiresAt < new Date()
-      ) {
-        // Invalid refresh token: either it's not in DB, doesn't match the stored one, or is expired
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-
-      // Generate new tokens and save them (Existing Logic from Previous responses):
-      const newAccessToken = await this.signToken({
-        // Use authService from app
-        id: refreshTokenPayload.userId,
-        email: refreshTokenPayload.sub,
-        username: refreshTokenPayload.username,
-      } as User);
-
-      await this.saveToken(refreshTokenPayload.userId, newAccessToken, false);
-
+      const newAccessToken =
+        await this.generateAccessToken(refreshTokenPayload);
       return { access_token: newAccessToken };
     } catch (error) {
-      throw new UnauthorizedException('Failed to refresh token.' + error);
+      throw new UnauthorizedException(error);
     }
+  }
+
+  async generateAccessToken(payload: JwtPayload): Promise<string> {
+    const newAccessToken = await this.signToken({
+      id: payload.userId,
+      email: payload.sub,
+      username: payload.username,
+    } as User);
+
+    await this.saveToken(payload.userId, newAccessToken, false);
+    return newAccessToken;
+  }
+
+  async verifyRefreshToken(token: string): Promise<JwtPayload> {
+    // New function
+    const refreshTokenPayload: JwtPayload = await this.jwtService.verifyAsync(
+      token,
+      {
+        secret: jwtConstants.refreshSecret,
+      },
+    );
+
+    const storedRefreshToken = await this.prisma.authToken.findUnique({
+      where: {
+        userId_isRefreshToken: {
+          userId: refreshTokenPayload.userId,
+          isRefreshToken: true,
+        },
+      },
+    });
+
+    if (
+      !storedRefreshToken ||
+      storedRefreshToken.token !== token ||
+      storedRefreshToken.expiresAt < new Date()
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return refreshTokenPayload;
   }
 
   async verifyAccessToken(token: string, request: Request, is_public: boolean) {
