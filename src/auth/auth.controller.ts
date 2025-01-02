@@ -6,6 +6,7 @@ import {
   HttpStatus,
   UseGuards,
   Get,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
@@ -43,11 +44,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Public()
   @Post('refresh')
-  async refresh(@Body() signInDto: SignInDto) {
-    // return await this.authService.generateRefreshToken(
-    //   signInDto.email,
-    //   signInDto.password,
-    // );
+  async refresh(@Body('refresh_token') refresh_token: string) {
+    if (!refresh_token) {
+      throw new UnauthorizedException('Refresh Token not provided');
+    }
+    return this.authService.refresh(refresh_token);
   }
 
   @HttpCode(HttpStatus.OK)

@@ -15,6 +15,8 @@ import { join } from 'path';
 import * as fs from 'fs';
 import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { JwtPayload } from './auth.guard';
+import { Request } from 'express';
 
 @Injectable()
 export class AuthService {
@@ -169,6 +171,122 @@ export class AuthService {
           ...user,
           ...(await this.generateTokens(user)),
         };
+      }
+    }
+  }
+
+  async refresh(refreshToken: string): Promise<{ access_token: string }> {
+    try {
+      const refreshTokenPayload: JwtPayload = await this.jwtService.verifyAsync(
+        refreshToken,
+        {
+          secret: jwtConstants.refreshSecret,
+        },
+      );
+
+      const storedRefreshToken = await this.prisma.authToken.findUnique({
+        where: {
+          userId_isRefreshToken: {
+            userId: refreshTokenPayload.userId,
+            isRefreshToken: true,
+          },
+        },
+      });
+
+      if (
+        !storedRefreshToken ||
+        storedRefreshToken.token !== refreshToken ||
+        storedRefreshToken.expiresAt < new Date()
+      ) {
+        // Invalid refresh token: either it's not in DB, doesn't match the stored one, or is expired
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Generate new tokens and save them (Existing Logic from Previous responses):
+      const newAccessToken = await this.signToken({
+        // Use authService from app
+        id: refreshTokenPayload.userId,
+        email: refreshTokenPayload.sub,
+        username: refreshTokenPayload.username,
+      } as User);
+
+      await this.saveToken(refreshTokenPayload.userId, newAccessToken, false);
+
+      return { access_token: newAccessToken };
+    } catch (error) {
+      throw new UnauthorizedException('Failed to refresh token.' + error);
+    }
+  }
+
+  async verifyAccessToken(token: string, request: Request, is_public: boolean) {
+    try {
+      const payload: JwtPayload = await this.jwtService.verifyAsync(token, {
+        secret: jwtConstants.secret,
+      });
+
+      const existing_token = await this.prisma.authToken.findUnique({
+        where: { token },
+      });
+
+      if (!existing_token || existing_token.userId !== payload.userId) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      request['user'] = payload;
+    } catch (error) {
+      if (!is_public) {
+        try {
+          const refresh_token_payload: JwtPayload =
+            await this.jwtService.verifyAsync(token, {
+              secret: jwtConstants.refreshSecret,
+            });
+
+          const refreshToken = await this.prisma.authToken.findUnique({
+            where: {
+              userId_isRefreshToken: {
+                userId: refresh_token_payload.userId,
+                isRefreshToken: true,
+              },
+            },
+          });
+
+          if (!refreshToken || refreshToken.token !== token) {
+            throw new UnauthorizedException('Invalid refresh token.');
+          }
+
+          const new_access_token = await this.signToken({
+            id: refresh_token_payload.userId,
+            email: refresh_token_payload.sub,
+            username: refresh_token_payload.username,
+          } as User);
+
+          const access_token_expires_at = new Date(Date.now() + 15 * 60 * 1000);
+          await this.prisma.authToken.upsert({
+            where: {
+              userId_isRefreshToken: {
+                userId: refresh_token_payload.userId,
+                isRefreshToken: false,
+              },
+            },
+            create: {
+              token: new_access_token,
+              userId: refresh_token_payload.userId,
+              expiresAt: access_token_expires_at,
+              isRefreshToken: false,
+            },
+            update: {
+              token: new_access_token,
+              expiresAt: access_token_expires_at,
+            },
+          });
+
+          request['user'] = refresh_token_payload;
+          request.headers.authorization = `Bearer ${new_access_token}`;
+        } catch {
+          throw new UnauthorizedException(error);
+        }
+      } else {
+        throw new UnauthorizedException(error);
       }
     }
   }
