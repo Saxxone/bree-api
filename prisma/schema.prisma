@@ -39,6 +39,7 @@ model User {
   publicKey                 String?
   userChatEncryptedMessages UserChatEncryptedMessage[]
   LongPost                  LongPost[]
+  AuthToken                 AuthToken[]
 }
 
 model Post {
@@ -161,4 +162,17 @@ enum RoomType {
 enum PostType {
   LONG
   SHORT
+}
+
+model AuthToken {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  token          String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isRefreshToken Boolean  @default(false)
+
+  @@unique([userId, isRefreshToken])
 }

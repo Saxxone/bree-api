@@ -42,6 +42,16 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Public()
+  @Post('refresh')
+  async refresh(@Body() signInDto: SignInDto) {
+    // return await this.authService.generateRefreshToken(
+    //   signInDto.email,
+    //   signInDto.password,
+    // );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Public()
   @Post('logout')
   async signOut(@Body() signInDto: SignInDto) {
     return await this.authService.signOut(signInDto.email, signInDto.password);

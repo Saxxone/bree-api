@@ -19,6 +19,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ChatModule } from './chat/chat.module';
 import { RoomModule } from './room/room.module';
 import { BullModule } from '@nestjs/bullmq';
+import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [
@@ -28,6 +30,7 @@ import { BullModule } from '@nestjs/bullmq';
         port: 6379,
       },
     }),
+    PrismaModule,
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     ConfigModule.forRoot(),
@@ -53,6 +56,7 @@ import { BullModule } from '@nestjs/bullmq';
   controllers: [AppController],
   providers: [
     AppService,
+    PrismaService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

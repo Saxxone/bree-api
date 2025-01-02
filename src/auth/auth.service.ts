@@ -14,7 +14,7 @@ import * as https from 'https';
 import { join } from 'path';
 import * as fs from 'fs';
 import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
@@ -40,13 +40,9 @@ export class AuthService {
 
     if (user.password) delete user.password;
 
-    const payload = { sub: user.email, username: user.username };
-
     return {
       ...user,
-      access_token: await this.jwtService.signAsync(payload, {
-        secret: jwtConstants.secret,
-      }),
+      ...(await this.generateTokens(user)),
     };
   }
 
@@ -89,14 +85,11 @@ export class AuthService {
     if (user.img === default_img) {
       return await this.updateUserProfile(user, payload, default_img);
     } else {
-      const data = { sub: user.email, username: user.username };
       if (user.password) delete user.password;
 
       return {
         ...user,
-        access_token: await this.jwtService.signAsync(data, {
-          secret: jwtConstants.secret,
-        }),
+        ...(await this.generateTokens(user)),
       };
     }
   }
@@ -139,15 +132,11 @@ export class AuthService {
 
     const new_user = await this.userService.createFedUser(u);
 
-    const data = { sub: new_user.email, username: new_user.username };
-
     if (new_user.password) delete new_user.password;
 
     return {
       ...new_user,
-      access_token: await this.jwtService.signAsync(data, {
-        secret: jwtConstants.secret,
-      }),
+      ...(await this.generateTokens(new_user)),
     };
   }
 
@@ -167,30 +156,78 @@ export class AuthService {
 
         if (updated_user.password) delete updated_user.password;
 
-        const data = {
-          sub: updated_user.email,
-          username: updated_user.username,
-        };
-
         return {
           ...updated_user,
-          access_token: await this.jwtService.signAsync(data, {
-            secret: jwtConstants.secret,
-          }),
+          ...(await this.generateTokens(updated_user)),
         };
       } catch (error) {
         console.error('Error downloading or saving image:', error);
 
         if (user.password) delete user.password;
-        const data = { sub: user.email, username: user.username };
+
         return {
           ...user,
-          access_token: await this.jwtService.signAsync(data, {
-            secret: jwtConstants.secret,
-          }),
+          ...(await this.generateTokens(user)),
         };
       }
     }
+  }
+
+  async generateTokens(
+    user: User,
+  ): Promise<{ access_token: string; refresh_token: string }> {
+    const access_token = await this.signToken(user);
+    const refresh_token = await this.generateRefreshToken(user);
+
+    await this.saveToken(user.id, access_token, false);
+    await this.saveToken(user.id, refresh_token, true);
+
+    return { access_token, refresh_token };
+  }
+
+  async signToken(user: User): Promise<string> {
+    const payload = {
+      sub: user.email,
+      username: user.username,
+      userId: user.id,
+    };
+    return this.jwtService.signAsync(payload, {
+      secret: jwtConstants.secret,
+      expiresIn: '15m',
+    });
+  }
+
+  private async generateRefreshToken(user: User): Promise<string> {
+    const payload = {
+      sub: user.email,
+      username: user.username,
+      userId: user.id,
+    };
+    return this.jwtService.signAsync(payload, {
+      secret: jwtConstants.refreshSecret,
+      expiresIn: '7d',
+    });
+  }
+
+  private async saveToken(
+    userId: string,
+    token: string,
+    isRefreshToken: boolean,
+  ): Promise<void> {
+    const expiresAt = new Date(
+      Date.now() + (isRefreshToken ? 7 : 15) * 60 * 1000,
+    );
+
+    await this.prisma.authToken.upsert({
+      where: { userId_isRefreshToken: { userId, isRefreshToken } },
+      update: { token, expiresAt },
+      create: {
+        userId,
+        token,
+        isRefreshToken,
+        expiresAt,
+      },
+    });
   }
 
   private createImgPath() {
@@ -204,7 +241,7 @@ export class AuthService {
 
   private async downloadImage(url: string, filepath: string): Promise<void> {
     try {
-      return new Promise((resolve, reject) => {
+      return await new Promise((resolve, reject) => {
         const file = fs.createWriteStream(filepath);
         https
           .get(url, (response) => {

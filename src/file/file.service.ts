@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
-import { PrismaService } from '../prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';

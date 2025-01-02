@@ -6,10 +6,10 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "nest start --watch",
+    "start:dev": "prisma generate && nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
@@ -27,7 +27,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force",
     "prepare": "husky",
-    "doc": "npx compodoc -p tsconfig.json -s -n \"Bree API documentation\""
+    "doc": "npx compodoc -p tsconfig.json -s -n \"Bree API documentation\"",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.3",
@@ -70,6 +71,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^20.3.1",
     "@types/supertest": "^6.0.0",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^8.42.0",
