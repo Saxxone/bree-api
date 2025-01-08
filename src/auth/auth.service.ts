@@ -199,7 +199,6 @@ export class AuthService {
   }
 
   async verifyRefreshToken(token: string): Promise<JwtPayload> {
-    // New function
     const refreshTokenPayload: JwtPayload = await this.jwtService.verifyAsync(
       token,
       {
