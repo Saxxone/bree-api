@@ -95,10 +95,11 @@ export async function compressVideo(file: Express.Multer.File) {
   const uniqueId = randomUUID();
   const outputPath = `${file.path}_${uniqueId}_compressed.mp4`;
   try {
-    const command = `ffmpeg -i "${file.path}" -vcodec libx264 -crf 28 -preset veryfast -movflags +faststart "${outputPath}"`;
-    await execPromise(command); // Execute FFmpeg
-    await fs.unlink(file.path);
-    await fs.rename(outputPath, file.path);
+    //disabled compression
+    // const command = `ffmpeg -i "${file.path}" -vcodec libx264 -crf 28 -preset veryfast -movflags +faststart "${outputPath}"`;
+    // await execPromise(command); // Execute FFmpeg
+    // await fs.unlink(file.path);
+    // await fs.rename(outputPath, file.path);
 
     const fileExtension = extname(file.originalname);
     const newFileName = `${file.originalname.split('.')[0]}_${uniqueId}${fileExtension}`;

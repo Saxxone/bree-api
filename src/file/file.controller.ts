@@ -35,7 +35,7 @@ const allowedMimeTypes = new Set([
 const storage = diskStorage({
   destination,
   filename: (req, file, cb) => {
-    const name = file.originalname.split('.')[0];
+    const name = encodeURIComponent(file.originalname.split('.')[0]);
     const extension = extname(file.originalname);
     const randomName = Array(32)
       .fill(null)
