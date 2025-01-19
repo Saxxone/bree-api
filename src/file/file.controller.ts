@@ -1,22 +1,22 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  UseInterceptors,
-  Request,
   BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Request,
+  UseInterceptors,
 } from '@nestjs/common';
-import { FileService } from './file.service';
-import { UpdateFileDto } from './dto/update-file.dto';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import * as fs from 'fs';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
-import * as fs from 'fs';
+import { UpdateFileDto } from './dto/update-file.dto';
 import { compressFiles } from './file.manager';
+import { FileService } from './file.service';
 
 const destination = join(__dirname, '../../../../', 'media');
 
@@ -35,7 +35,7 @@ const allowedMimeTypes = new Set([
 const storage = diskStorage({
   destination,
   filename: (req, file, cb) => {
-    const name = encodeURIComponent(file.originalname.split('.')[0]);
+    const name = file.originalname.split('.')[0];
     const extension = extname(file.originalname);
     const randomName = Array(32)
       .fill(null)
