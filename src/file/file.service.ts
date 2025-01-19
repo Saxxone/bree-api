@@ -65,7 +65,7 @@ export class FileService {
           filename: file.filename,
           originalname: file.originalname,
           path: file.path,
-          url: join(media_base_url, file.filename),
+          url: media_base_url + file.filename,
           mimetype: file.mimetype,
           size: file.size,
           status: Status.PENDING,
