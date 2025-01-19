@@ -4,7 +4,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
-import { join } from 'path';
 import { UpdateFileDto } from './dto/update-file.dto';
 
 @Injectable()

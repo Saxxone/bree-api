@@ -18,6 +18,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtPayload } from './auth.guard';
 import { Request } from 'express';
 
+
+const EXPIRY = '200d'
 @Injectable()
 export class AuthService {
   constructor(
@@ -267,7 +269,9 @@ export class AuthService {
             username: refresh_token_payload.username,
           } as User);
 
-          const access_token_expires_at = new Date(Date.now() + 15 * 60 * 1000);
+          const access_token_expires_at = new Date(
+            Date.now() + 200 * 60 * 1000,
+          );
           await this.prisma.authToken.upsert({
             where: {
               userId_isRefreshToken: {
@@ -318,7 +322,7 @@ export class AuthService {
     };
     return this.jwtService.signAsync(payload, {
       secret: jwtConstants.secret,
-      expiresIn: '15m',
+      expiresIn: EXPIRY,
     });
   }
 
@@ -340,7 +344,7 @@ export class AuthService {
     isRefreshToken: boolean,
   ): Promise<void> {
     const expiresAt = new Date(
-      Date.now() + (isRefreshToken ? 7 : 15) * 60 * 1000,
+      Date.now() + (isRefreshToken ? 100 : 200) * 60 * 1000,
     );
 
     await this.prisma.authToken.upsert({
