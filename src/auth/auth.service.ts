@@ -18,8 +18,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtPayload } from './auth.guard';
 import { Request } from 'express';
 
-
-const EXPIRY = '200d'
+const EXPIRY = '200d';
 @Injectable()
 export class AuthService {
   constructor(
