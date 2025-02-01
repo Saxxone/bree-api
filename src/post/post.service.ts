@@ -12,8 +12,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 
-
-
 @Injectable()
 export class PostService {
   constructor(

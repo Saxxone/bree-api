@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   Sse,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -17,7 +16,8 @@ import { Observable, fromEventPattern, map, merge } from 'rxjs';
 import {
   CreateNotificationDto,
   MessageEvent,
-  NotificationTypes
+  NotificationObject,
+  NotificationTypes,
 } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { NotificationService } from './notification.service';
@@ -27,7 +27,7 @@ export class NotificationController {
   constructor(
     private readonly notificationService: NotificationService,
     private readonly eventEmitter: EventEmitter2,
-  ) { }
+  ) {}
 
   @Cron('* * 0 * * *', {
     name: 'notifications',
@@ -37,13 +37,13 @@ export class NotificationController {
 
   @Sse('sse')
   @Header('Content-Type', 'text/event-stream')
-  async sse(@Req() request: any): Promise<Observable<MessageEvent>> {
+  async sse(): Promise<Observable<MessageEvent>> {
     const handleEvent = (type: NotificationTypes) =>
-      fromEventPattern(
+      fromEventPattern<NotificationObject>(
         (handler) => this.eventEmitter.on(type, handler),
         (handler) => this.eventEmitter.off(type, handler),
       ).pipe(
-        map((event: any) => ({
+        map((event) => ({
           data: event,
         })),
       );
