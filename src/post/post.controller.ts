@@ -1,18 +1,18 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
-  Body,
   Put,
-  Delete,
-  Request,
   Query,
+  Request,
 } from '@nestjs/common';
-import { PostService } from './post.service';
 import { Post as PostModel } from '@prisma/client';
-import { CreatePostDto } from './dto/create-post.dto';
 import { Public } from 'src/auth/auth.guard';
+import { CreatePostDto } from './dto/create-post.dto';
+import { PostService } from './post.service';
 
 @Controller('posts')
 export class PostController {
@@ -88,7 +88,6 @@ export class PostController {
     @Param('id') id: string,
     @Request() req: any,
   ): Promise<PostModel> {
-    console.log(req.user);
     return await this.postService.viewSinglePost(id, req.user?.sub);
   }
 

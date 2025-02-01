@@ -7,21 +7,27 @@ import {
   Param,
   Patch,
   Post,
+  Query,
+  Req,
   Sse,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
-import { Observable, interval, map } from 'rxjs';
-import { Public } from 'src/auth/auth.guard';
+import { Observable, fromEventPattern, map, merge } from 'rxjs';
 import {
   CreateNotificationDto,
   MessageEvent,
+  NotificationTypes
 } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { NotificationService } from './notification.service';
 
 @Controller('notifications')
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(
+    private readonly notificationService: NotificationService,
+    private readonly eventEmitter: EventEmitter2,
+  ) { }
 
   @Cron('* * 0 * * *', {
     name: 'notifications',
@@ -29,29 +35,23 @@ export class NotificationController {
   })
   triggerNotifications() {}
 
-  @Public()
   @Sse('sse')
   @Header('Content-Type', 'text/event-stream')
-  sse(): Observable<MessageEvent> {
-    return interval(10000).pipe(
-      map(() => ({
-        data: {
-          author: {
-            name: 'Stephen',
-            id: '1',
-            email: 'saxxone17@gmail.com',
-            username: 'saxxone',
-            bio: '',
-            verified: true,
-            banner: '',
-            img: '',
-          },
-          description: 'replied to your chat',
-          date: new Date(),
-          id: '1',
-        },
-      })),
-    );
+  async sse(@Req() request: any): Promise<Observable<MessageEvent>> {
+    const handleEvent = (type: NotificationTypes) =>
+      fromEventPattern(
+        (handler) => this.eventEmitter.on(type, handler),
+        (handler) => this.eventEmitter.off(type, handler),
+      ).pipe(
+        map((event: any) => ({
+          data: event,
+        })),
+      );
+
+    const postCreated$ = handleEvent('post.created');
+    const commentAdded$ = handleEvent('comment.added');
+
+    return merge(postCreated$, commentAdded$);
   }
 
   @Post()
@@ -60,8 +60,8 @@ export class NotificationController {
   }
 
   @Get()
-  findAll() {
-    return this.notificationService.findAll();
+  findAll(@Query('skip') skip: number, @Query('take') take: number) {
+    return this.notificationService.findAll(skip, take);
   }
 
   @Get(':id')

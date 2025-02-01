@@ -49,7 +49,9 @@ export class AuthGuard implements CanActivate {
       );
 
       const request = context.switchToHttp().getRequest();
-      const token = this.extractTokenFromHeader(request);
+      const token =
+        this.extractTokenFromHeader(request) ??
+        this.extractaTokenFromQuery(request);
 
       if (token) await this.verifyAndProcessToken(token, request, isPublic);
 
@@ -86,6 +88,15 @@ export class AuthGuard implements CanActivate {
       token !== 'null' &&
       type === 'Bearer'
     ) {
+      return token;
+    } else {
+      return undefined;
+    }
+  }
+
+  private extractaTokenFromQuery(request: Request): string | undefined {
+    const token = request.query.token as string;
+    if (token && token !== '' && token !== 'undefined' && token !== 'null') {
       return token;
     } else {
       return undefined;
