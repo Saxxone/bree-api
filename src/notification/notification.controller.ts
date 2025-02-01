@@ -1,18 +1,25 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Sse,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { NotificationService } from './notification.service';
-import { CreateNotificationDto } from './dto/create-notification.dto';
+import { Observable, interval, map } from 'rxjs';
+import { Public } from 'src/auth/auth.guard';
+import {
+  CreateNotificationDto,
+  MessageEvent,
+} from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
+import { NotificationService } from './notification.service';
 
-@Controller('notification')
+@Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
@@ -21,6 +28,31 @@ export class NotificationController {
     timeZone: 'Europe/London',
   })
   triggerNotifications() {}
+
+  @Public()
+  @Sse('sse')
+  @Header('Content-Type', 'text/event-stream')
+  sse(): Observable<MessageEvent> {
+    return interval(10000).pipe(
+      map(() => ({
+        data: {
+          author: {
+            name: 'Stephen',
+            id: '1',
+            email: 'saxxone17@gmail.com',
+            username: 'saxxone',
+            bio: '',
+            verified: true,
+            banner: '',
+            img: '',
+          },
+          description: 'replied to your chat',
+          date: new Date(),
+          id: '1',
+        },
+      })),
+    );
+  }
 
   @Post()
   create(@Body() createNotificationDto: CreateNotificationDto) {

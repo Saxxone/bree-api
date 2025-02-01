@@ -2,16 +2,16 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
-  UnauthorizedException,
-  SetMetadata,
   Logger,
+  SetMetadata,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { Reflector } from '@nestjs/core/services/reflector.service';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
-import { Reflector } from '@nestjs/core/services/reflector.service';
 import { AuthService } from 'src/auth/auth.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ModuleRef } from '@nestjs/core';
 
 export interface JwtPayload {
   sub: string;
@@ -79,6 +79,16 @@ export class AuthGuard implements CanActivate {
 
   private extractTokenFromHeader(request: Request): string | undefined {
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
+    if (
+      token &&
+      token !== '' &&
+      token !== 'undefined' &&
+      token !== 'null' &&
+      type === 'Bearer'
+    ) {
+      return token;
+    } else {
+      return undefined;
+    }
   }
 }
