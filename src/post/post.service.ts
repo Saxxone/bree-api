@@ -389,7 +389,6 @@ export class PostService {
       });
 
       return updated_post;
-
     } catch (error) {
       console.log(error);
     }
