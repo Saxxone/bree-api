@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 import { NotificationType, Post, PostType, Prisma } from '@prisma/client';
 import { FileService } from 'src/file/file.service';
+import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
-import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 
 @Injectable()
 export class PostService {
@@ -354,32 +354,45 @@ export class PostService {
   }
 
   async likePost(postId: string, email: string): Promise<Post> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        include: { bookmarkedBy: true },
+      });
+
+      if (!post) {
+        throw new NotFoundException('Post not found');
+      }
+
+      const status = (await this.checkIfUserLikedPost(postId, email)).status;
+      const updated_post = await this.updatePost({
+        where: { id: postId },
+        data: {
+          likedBy: status ? { disconnect: { email } } : { connect: { email } },
+          likeCount: status ? post.likeCount - 1 : post.likeCount + 1,
+        },
+        email,
+      });
+
+      this.createNotification({
+        label: 'post.liked',
+        parent_id: null,
+        post: updated_post,
+      });
+
+      return updated_post;
+
+    } catch (error) {
+      console.log(error);
     }
-
-    const post = await this.prisma.post.findUnique({
-      where: { id: postId },
-      include: { bookmarkedBy: true },
-    });
-
-    if (!post) {
-      throw new NotFoundException('Post not found');
-    }
-
-    const status = (await this.checkIfUserLikedPost(postId, email)).status;
-    return this.updatePost({
-      where: { id: postId },
-      data: {
-        likedBy: status ? { disconnect: { email } } : { connect: { email } },
-        likeCount: status ? post.likeCount - 1 : post.likeCount + 1,
-      },
-      email,
-    });
   }
 
   async bookmarkPost(postId: string, email: string): Promise<Post> {

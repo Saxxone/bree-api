@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "Post" ALTER COLUMN "bookmarkCount" SET DEFAULT 0,
-ALTER COLUMN "commentCount" SET DEFAULT 0,
-ALTER COLUMN "likeCount" SET DEFAULT 0;

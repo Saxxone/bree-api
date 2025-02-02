@@ -194,6 +194,7 @@ model Notification {
 
 enum NotificationType {
   POST_CREATED
+  POST_LIKED
   COMMENT_ADDED
   USER_MENTIONED
 }

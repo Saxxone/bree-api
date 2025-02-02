@@ -14,7 +14,6 @@ export class NotificationService {
 
   async create(createNotificationDto: CreateNotificationDto) {
     try {
-      console.log(createNotificationDto);
       const notification = await this.prisma.notification.create({
         data: {
           ...createNotificationDto,
@@ -24,11 +23,12 @@ export class NotificationService {
         },
       });
 
-      console.log(notification);
-
       switch (createNotificationDto.type) {
         case NotificationType.POST_CREATED:
           this.eventEmitter.emit('post.created', createNotificationDto);
+          break;
+        case NotificationType.POST_LIKED:
+          this.eventEmitter.emit('post.liked', createNotificationDto);
           break;
         case NotificationType.COMMENT_ADDED:
           this.eventEmitter.emit('post.created', createNotificationDto);

@@ -1,7 +1,7 @@
 import { NotificationType, User } from '@prisma/client';
 import { IsOptional, IsString, ValidateNested } from 'class-validator';
 
-export type NotificationTypes = 'comment.added' | 'post.created';
+export type NotificationTypes = 'comment.added' | 'post.created' | 'post.liked';
 
 export class CreateNotificationDto {
   @IsOptional()
