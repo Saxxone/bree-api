@@ -1,5 +1,5 @@
 {
-  "name": "bree-api",
+  "name": "afovid-backend",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -28,7 +28,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force",
     "prepare": "husky",
-    "doc": "npx compodoc -p tsconfig.json -s -n \"Bree API documentation\"",
+    "doc": "npx compodoc -p tsconfig.json -s -n \"Afovid Backend documentation\"",
     "postinstall": "prisma generate"
   },
   "dependencies": {

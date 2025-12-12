@@ -1,4 +1,4 @@
-name: Bree API
+name: Afovid Backend
 
 on:
   push:
@@ -16,9 +16,9 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            cd ~/bree-api
+            cd ~/afovid-backend
             git pull origin main
             npm i
             npm run build
             npx prisma migrate deploy
-            pm2 restart bree-api
+            pm2 restart afovid-backend

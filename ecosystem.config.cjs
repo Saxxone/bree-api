@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'bree-api',
+      name: 'afovid-backend',
       script: 'npm run start',
       port: 3000,
       cwd: './',
