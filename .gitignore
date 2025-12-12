@@ -12,10 +12,14 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# OS
+# macOS system files
 .DS_Store
+.AppleDouble
+.LSOverride
 ._*
 */._
+*/*._
+**/.*/*._
 
 # Tests
 /coverage
