@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { User, Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateFedUserDto, CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -86,8 +86,12 @@ export class UserService {
   async createUser(d: CreateUserDto): Promise<User> {
     const default_img = process.env.DEFAULT_PROFILE_IMG;
 
+    // Clean username: trim whitespace and strip @ symbol from start
+    const cleanedUsername = d.username.trim().replace(/^@+/, '');
+
     const data = {
       ...d,
+      username: cleanedUsername,
       img: d.img ?? default_img,
       password: await bcrypt.hash(d.password, 10),
     };
