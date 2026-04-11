@@ -97,7 +97,9 @@ export class FileController {
     }),
   )
   @Post('upload')
-  async uploadFile(@Request() req: ExpressRequest & { user?: { sub: string } }) {
+  async uploadFile(
+    @Request() req: ExpressRequest & { user?: { sub: string } },
+  ) {
     let files: Array<Express.Multer.File> = [];
     let compressed_fiiles: Array<Express.Multer.File> = [];
 
@@ -217,10 +219,7 @@ export class FileController {
     if (range) {
       const match = /^bytes=(\d+)-(\d*)$/.exec(range);
       if (!match) {
-        res
-          .status(416)
-          .setHeader('Content-Range', `bytes */${fileSize}`)
-          .end();
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
         return;
       }
       const start = parseInt(match[1], 10);
@@ -231,10 +230,7 @@ export class FileController {
         start >= fileSize ||
         start > end
       ) {
-        res
-          .status(416)
-          .setHeader('Content-Range', `bytes */${fileSize}`)
-          .end();
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
         return;
       }
       end = Math.min(end, fileSize - 1);

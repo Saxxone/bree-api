@@ -92,7 +92,8 @@ export async function compressImage(file: Express.Multer.File) {
 }
 
 /** No-op while FFmpeg transcoding is disabled; keeps Multer path/filename aligned with disk. */
-export async function compressVideo(_file: Express.Multer.File) {
+export async function compressVideo(file: Express.Multer.File) {
+  void file;
   // When re-enabling FFmpeg: transcode to outputPath, unlink original, rename output to final
   // path, then set file.path, file.filename, and file.size from fs.stat.
 }

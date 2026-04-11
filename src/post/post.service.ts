@@ -111,8 +111,10 @@ export class PostService {
   }
 
   private static readonly STREAMED_MEDIA_TYPES = new Set(['video', 'audio']);
-  private readonly videoDirectPlaybackMaxBytes = parseVideoDirectPlaybackMaxBytes();
-  private readonly mediaDirectUrlRequiresAuth = parseMediaDirectUrlRequiresAuth();
+  private readonly videoDirectPlaybackMaxBytes =
+    parseVideoDirectPlaybackMaxBytes();
+  private readonly mediaDirectUrlRequiresAuth =
+    parseMediaDirectUrlRequiresAuth();
 
   private streamUrlForFileId(fileId: string): string {
     const base = (process.env.API_BASE_URL ?? '').replace(/\/$/, '');
@@ -225,7 +227,10 @@ export class PostService {
                   block.mediaTypes ?? [],
                   fileByUrl,
                 )
-              : { mediaPlayback: [] as string[], mediaMetadata: [] as (PostMediaMetadataEntry | null)[] };
+              : {
+                  mediaPlayback: [] as string[],
+                  mediaMetadata: [] as (PostMediaMetadataEntry | null)[],
+                };
             return {
               ...block,
               mediaPlayback: built.mediaPlayback,
@@ -235,7 +240,12 @@ export class PostService {
         }
       : post.longPost;
 
-    return { ...post, mediaPlayback, mediaMetadata, longPost } as PostWithLongPostMedia & {
+    return {
+      ...post,
+      mediaPlayback,
+      mediaMetadata,
+      longPost,
+    } as PostWithLongPostMedia & {
       mediaPlayback: string[];
       mediaMetadata: (PostMediaMetadataEntry | null)[];
     };
@@ -253,9 +263,7 @@ export class PostService {
     return this.enrichPostPlayback(post, fileByUrl);
   }
 
-  private async withMediaPlaybackMany(
-    posts: PostWithLongPostMedia[],
-  ): Promise<
+  private async withMediaPlaybackMany(posts: PostWithLongPostMedia[]): Promise<
     Array<
       PostWithLongPostMedia & {
         mediaPlayback: string[];

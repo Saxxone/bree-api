@@ -11,10 +11,7 @@ import { User } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import * as https from 'https';
 import { join } from 'path';
-import {
-  getMediaStorageDir,
-  resolveFileBaseUrl,
-} from 'src/file/media-storage';
+import { getMediaStorageDir, resolveFileBaseUrl } from 'src/file/media-storage';
 import * as fs from 'fs';
 import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
