@@ -62,7 +62,11 @@ export class AuthGuard implements CanActivate {
       }
       return true;
     } catch (error) {
-      this.logger.error(error);
+      if (error instanceof UnauthorizedException) {
+        this.logger.debug(error.message || 'Unauthorized');
+      } else {
+        this.logger.error(error);
+      }
       throw error;
     }
   }
@@ -75,7 +79,10 @@ export class AuthGuard implements CanActivate {
     try {
       await this.authService.verifyAccessToken(token, request, isPublic);
     } catch (error) {
-      throw new UnauthorizedException(error);
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid token');
     }
   }
 

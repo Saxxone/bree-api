@@ -8,7 +8,20 @@ describe('FileController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FileController],
-      providers: [FileService],
+      providers: [
+        {
+          provide: FileService,
+          useValue: {
+            findAll: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+            findForStream: jest.fn(),
+            assertStreamAccess: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<FileController>(FileController);

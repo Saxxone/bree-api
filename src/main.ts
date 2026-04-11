@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
@@ -11,6 +12,7 @@ async function bootstrap() {
     origin: [ui_base_url, 'http://localhost:4000', '*'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    exposedHeaders: ['Content-Range', 'Accept-Ranges'],
   });
 
   app.setGlobalPrefix('api');
@@ -28,7 +30,11 @@ async function bootstrap() {
   //   }),
   // );
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   await app.listen(3000);
 

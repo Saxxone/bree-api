@@ -1,10 +1,17 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Status, File as FileModel } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
 import { UpdateFileDto } from './dto/update-file.dto';
+import { resolveFileBaseUrl } from './media-storage';
 
 @Injectable()
 export class FileService {
@@ -56,7 +63,7 @@ export class FileService {
   ): Promise<string[]> {
     const user = await this.userService.findUser(email);
     const savedFiles: string[] = [];
-    const media_base_url = process.env.FILE_BASE_URL;
+    const media_base_url = resolveFileBaseUrl();
 
     for (const file of files) {
       const savedFile = await this.prisma.file.create({
@@ -120,6 +127,117 @@ export class FileService {
 
   findAll() {
     return `This action returns all file`;
+  }
+
+  async findForStream(id: string): Promise<FileModel> {
+    const file = await this.prisma.file.findUnique({ where: { id } });
+    if (!file || file.status === Status.DELETED) {
+      throw new NotFoundException('File not found');
+    }
+    return file;
+  }
+
+  async findForStreamByFilename(rawName: string): Promise<FileModel> {
+    if (
+      !rawName ||
+      rawName.includes('/') ||
+      rawName.includes('\\') ||
+      rawName === '.' ||
+      rawName === '..'
+    ) {
+      throw new BadRequestException('Invalid filename');
+    }
+    const file = await this.prisma.file.findFirst({
+      where: {
+        filename: rawName,
+        status: { not: Status.DELETED },
+      },
+    });
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+    return file;
+  }
+
+  /** Row fields needed for post playback URLs and video metadata. */
+  async findFilesByUrls(urls: string[]): Promise<
+    Map<
+      string,
+      {
+        id: string;
+        type: string;
+        mimetype: string;
+        size: number;
+        originalname: string;
+        filename: string;
+        url: string;
+        status: Status;
+      }
+    >
+  > {
+    const unique = [...new Set(urls.filter(Boolean))];
+    if (unique.length === 0) {
+      return new Map();
+    }
+    const files = await this.prisma.file.findMany({
+      where: {
+        OR: [{ url: { in: unique } }, { path: { in: unique } }],
+        status: { in: [Status.UPLOADED, Status.PENDING] },
+      },
+      select: {
+        id: true,
+        url: true,
+        path: true,
+        type: true,
+        mimetype: true,
+        size: true,
+        originalname: true,
+        filename: true,
+        status: true,
+      },
+    });
+    type Row = {
+      id: string;
+      type: string;
+      mimetype: string;
+      size: number;
+      originalname: string;
+      filename: string;
+      url: string;
+      status: Status;
+    };
+    const map = new Map<string, Row>();
+    for (const f of files) {
+      const row: Row = {
+        id: f.id,
+        type: f.type,
+        mimetype: f.mimetype,
+        size: f.size,
+        originalname: f.originalname,
+        filename: f.filename,
+        url: f.url,
+        status: f.status,
+      };
+      map.set(f.url, row);
+      map.set(f.path, row);
+    }
+    return map;
+  }
+
+  assertStreamAccess(
+    file: FileModel,
+    user: { userId?: string } | undefined,
+  ): void {
+    if (!user?.userId) {
+      throw new ForbiddenException();
+    }
+    if (file.status === Status.UPLOADED) {
+      return;
+    }
+    if (file.ownerId === user.userId) {
+      return;
+    }
+    throw new ForbiddenException();
   }
 
   findOne(id: string) {

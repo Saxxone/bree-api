@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "module": "nodenext",
     "esModuleInterop": true,
@@ -19,6 +20,6 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "moduleResolution": "NodeNext",
-    "target": "ES2023",
+    "target": "ES2023"
   }
 }

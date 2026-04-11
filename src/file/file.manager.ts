@@ -91,32 +91,10 @@ export async function compressImage(file: Express.Multer.File) {
   }
 }
 
-export async function compressVideo(file: Express.Multer.File) {
-  const uniqueId = randomUUID();
-  const outputPath = `${file.path}_${uniqueId}_compressed.mp4`;
-  try {
-    //disabled compression
-    // const command = `ffmpeg -i "${file.path}" -vcodec libx264 -crf 28 -preset veryfast -movflags +faststart "${outputPath}"`;
-    // await execPromise(command); // Execute FFmpeg
-    // await fs.unlink(file.path);
-    // await fs.rename(outputPath, file.path);
-
-    const fileExtension = extname(file.originalname);
-    const newFileName = `${file.originalname.split('.')[0]}_${uniqueId}${fileExtension}`;
-
-    file.path = join(dirname(file.path), newFileName);
-    file.filename = newFileName;
-
-    console.log(`Compressed video: ${file.originalname}`);
-  } catch (error) {
-    console.error(`Error compressing video ${file.originalname}:`, error);
-
-    if (error instanceof Error && (error as any).stderr) {
-      console.error('FFmpeg stderr:', (error as any).stderr);
-    }
-    await fs.access(outputPath, constants.F_OK);
-    await fs.unlink(outputPath);
-  }
+/** No-op while FFmpeg transcoding is disabled; keeps Multer path/filename aligned with disk. */
+export async function compressVideo(_file: Express.Multer.File) {
+  // When re-enabling FFmpeg: transcode to outputPath, unlink original, rename output to final
+  // path, then set file.path, file.filename, and file.size from fs.stat.
 }
 
 export async function compressAudio(file: Express.Multer.File) {

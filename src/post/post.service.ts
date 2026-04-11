@@ -1,25 +1,276 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
-  NotImplementedException,
 } from '@nestjs/common';
-import { NotificationType, Post, PostType, Prisma } from '@prisma/client';
+import {
+  NotificationType,
+  Post,
+  PostType,
+  Prisma,
+  Status as FileStatus,
+} from '@prisma/client';
 import { FileService } from 'src/file/file.service';
+import {
+  isHttpAccessibleUrl,
+  mediaFilePublicUrl,
+} from 'src/file/media-storage';
 import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
+/** Post as returned from queries that may include `longPost.content` (playback URLs). */
+type PostWithLongPostMedia = Post & {
+  longPost?: {
+    id: string;
+    content?: Array<{ media: string[]; mediaTypes: string[] }>;
+  } | null;
+};
+
+/** Per-asset metadata aligned with `media` / `mediaPlayback` (null if file row missing). */
+export type PostMediaMetadataEntry = {
+  fileId: string;
+  sizeBytes: number;
+  mimeType: string;
+  originalFilename: string;
+  /** If true, client should send auth (e.g. Bearer or `?token=`) when loading `mediaPlayback`. Stream mode is always true. */
+  requiresAuth: boolean;
+  /** video / audio only: direct URL vs range streaming */
+  playbackMode?: 'direct' | 'stream';
+};
+
+type FileRowForPlayback = {
+  id: string;
+  type: string;
+  mimetype: string;
+  size: number;
+  originalname: string;
+  filename: string;
+  url: string;
+  status: FileStatus;
+};
+
+function parseVideoDirectPlaybackMaxBytes(): number {
+  const raw = process.env.VIDEO_DIRECT_PLAYBACK_MAX_BYTES;
+  if (raw === undefined || raw === '') {
+    return 25 * 1024 * 1024;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) {
+    return 25 * 1024 * 1024;
+  }
+  return n;
+}
+
+function parseMediaDirectUrlRequiresAuth(): boolean {
+  const raw = process.env.MEDIA_DIRECT_URL_REQUIRES_AUTH;
+  if (raw === undefined || raw === '') {
+    return false;
+  }
+  const lower = raw.toLowerCase();
+  return lower === '1' || lower === 'true' || lower === 'yes';
+}
+
 @Injectable()
 export class PostService {
+  /** Used after writes to avoid concurrent pg `client.query()` on one connection (Prisma adapter-pg + pg ≥8.20). */
+  private readonly defaultPostInclude: Prisma.PostInclude = {
+    likedBy: true,
+    bookmarkedBy: true,
+    author: {
+      select: {
+        id: true,
+        name: true,
+        img: true,
+      },
+    },
+    longPost: {
+      select: {
+        id: true,
+        content: true,
+      },
+    },
+  };
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly fileService: FileService,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
   ) {}
+
+  private loadPostAfterWrite(postId: string) {
+    return this.prisma.post.findUniqueOrThrow({
+      where: { id: postId },
+      include: this.defaultPostInclude,
+    });
+  }
+
+  private static readonly STREAMED_MEDIA_TYPES = new Set(['video', 'audio']);
+  private readonly videoDirectPlaybackMaxBytes = parseVideoDirectPlaybackMaxBytes();
+  private readonly mediaDirectUrlRequiresAuth = parseMediaDirectUrlRequiresAuth();
+
+  private streamUrlForFileId(fileId: string): string {
+    const base = (process.env.API_BASE_URL ?? '').replace(/\/$/, '');
+    const path = `/api/file/stream/${fileId}`;
+    return base ? `${base}${path}` : path;
+  }
+
+  private collectMediaUrlsFromPosts(posts: PostWithLongPostMedia[]): string[] {
+    const urls = new Set<string>();
+    for (const post of posts) {
+      post.media?.forEach((u) => {
+        if (u) urls.add(u);
+      });
+      const blocks = post.longPost?.content ?? [];
+      for (const b of blocks) {
+        b.media?.forEach((u) => {
+          if (u) urls.add(u);
+        });
+      }
+    }
+    return [...urls];
+  }
+
+  private buildMediaPlaybackAndMetadata(
+    media: string[],
+    mediaTypes: string[],
+    fileByUrl: Map<string, FileRowForPlayback>,
+  ): {
+    mediaPlayback: string[];
+    mediaMetadata: (PostMediaMetadataEntry | null)[];
+  } {
+    if (!media.length) {
+      return { mediaPlayback: [], mediaMetadata: [] };
+    }
+    const mediaPlayback: string[] = [];
+    const mediaMetadata: (PostMediaMetadataEntry | null)[] = [];
+
+    for (let i = 0; i < media.length; i++) {
+      const url = media[i];
+      const t = mediaTypes[i];
+      const file = fileByUrl.get(url);
+
+      if (!file) {
+        mediaPlayback.push(url);
+        mediaMetadata.push(null);
+        continue;
+      }
+
+      const storedUrlIsHttp = isHttpAccessibleUrl(url);
+      const directPlaybackUrl = storedUrlIsHttp
+        ? url
+        : mediaFilePublicUrl(file.filename);
+
+      const directRequiresAuth =
+        file.status !== FileStatus.UPLOADED
+          ? true
+          : storedUrlIsHttp && this.mediaDirectUrlRequiresAuth;
+
+      if (!t || !PostService.STREAMED_MEDIA_TYPES.has(t)) {
+        mediaPlayback.push(directPlaybackUrl);
+        mediaMetadata.push({
+          fileId: file.id,
+          sizeBytes: file.size,
+          mimeType: file.mimetype,
+          originalFilename: file.originalname,
+          requiresAuth: directRequiresAuth,
+        });
+        continue;
+      }
+
+      const useStreaming = file.size > this.videoDirectPlaybackMaxBytes;
+      mediaPlayback.push(
+        useStreaming ? this.streamUrlForFileId(file.id) : directPlaybackUrl,
+      );
+      mediaMetadata.push({
+        fileId: file.id,
+        sizeBytes: file.size,
+        mimeType: file.mimetype,
+        originalFilename: file.originalname,
+        requiresAuth: useStreaming ? true : directRequiresAuth,
+        playbackMode: useStreaming ? 'stream' : 'direct',
+      });
+    }
+
+    return { mediaPlayback, mediaMetadata };
+  }
+
+  private enrichPostPlayback(
+    post: PostWithLongPostMedia,
+    fileByUrl: Map<string, FileRowForPlayback>,
+  ): PostWithLongPostMedia & {
+    mediaPlayback: string[];
+    mediaMetadata: (PostMediaMetadataEntry | null)[];
+  } {
+    const { mediaPlayback, mediaMetadata } = post.media?.length
+      ? this.buildMediaPlaybackAndMetadata(
+          post.media,
+          post.mediaTypes ?? [],
+          fileByUrl,
+        )
+      : { mediaPlayback: [], mediaMetadata: [] };
+
+    const longPost = post.longPost
+      ? {
+          ...post.longPost,
+          content: (post.longPost.content ?? []).map((block) => {
+            const built = block.media?.length
+              ? this.buildMediaPlaybackAndMetadata(
+                  block.media,
+                  block.mediaTypes ?? [],
+                  fileByUrl,
+                )
+              : { mediaPlayback: [] as string[], mediaMetadata: [] as (PostMediaMetadataEntry | null)[] };
+            return {
+              ...block,
+              mediaPlayback: built.mediaPlayback,
+              mediaMetadata: built.mediaMetadata,
+            };
+          }),
+        }
+      : post.longPost;
+
+    return { ...post, mediaPlayback, mediaMetadata, longPost } as PostWithLongPostMedia & {
+      mediaPlayback: string[];
+      mediaMetadata: (PostMediaMetadataEntry | null)[];
+    };
+  }
+
+  private async withMediaPlayback(post: PostWithLongPostMedia): Promise<
+    PostWithLongPostMedia & {
+      mediaPlayback: string[];
+      mediaMetadata: (PostMediaMetadataEntry | null)[];
+    }
+  > {
+    const fileByUrl = await this.fileService.findFilesByUrls(
+      this.collectMediaUrlsFromPosts([post]),
+    );
+    return this.enrichPostPlayback(post, fileByUrl);
+  }
+
+  private async withMediaPlaybackMany(
+    posts: PostWithLongPostMedia[],
+  ): Promise<
+    Array<
+      PostWithLongPostMedia & {
+        mediaPlayback: string[];
+        mediaMetadata: (PostMediaMetadataEntry | null)[];
+      }
+    >
+  > {
+    if (posts.length === 0) {
+      return [];
+    }
+    const fileByUrl = await this.fileService.findFilesByUrls(
+      this.collectMediaUrlsFromPosts(posts),
+    );
+    return posts.map((p) => this.enrichPostPlayback(p, fileByUrl));
+  }
 
   async createPost(
     data: CreatePostDto,
@@ -96,26 +347,12 @@ export class PostService {
         published,
       };
 
-      const post = await this.prisma.post.create({
+      const { id: postId } = await this.prisma.post.create({
         data: createData,
-        include: {
-          likedBy: true,
-          bookmarkedBy: true,
-          author: {
-            select: {
-              id: true,
-              name: true,
-              img: true,
-            },
-          },
-          longPost: {
-            select: {
-              id: true,
-              content: true,
-            },
-          },
-        },
+        select: { id: true },
       });
+
+      const post = await this.loadPostAfterWrite(postId);
 
       //Mark uploaded for short posts
       if (fileIds.length > 0)
@@ -130,8 +367,9 @@ export class PostService {
         );
       }
 
-      if (post.parentId)
-        this.incrementParentPostCommentCount(post.parentId, email);
+      if (post.parentId) {
+        await this.incrementParentPostCommentCount(post.parentId, email);
+      }
 
       await this.createNotification({
         parent_id: parentId,
@@ -139,28 +377,36 @@ export class PostService {
         label: parentId ? 'comment.added' : 'post.created',
       });
 
-      return post;
-    } catch {
-      throw new NotImplementedException('Post creation failed');
+      return this.withMediaPlayback(post);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      console.error('Post creation failed:', error);
+      throw new InternalServerErrorException('Post creation failed');
     }
   }
 
   async createNotification(options: {
-    parent_id: string;
+    parent_id?: string;
     post: Post;
     label: NotificationTypes;
   }) {
-    const parent_post = await this.findParentPost(options.parent_id, true);
+    if (!options.parent_id) {
+      return;
+    }
 
-    //@ts-expect-error: userService.findUser may not have the correct type
-    const user = await this.userService.findUser(parent_post.author.id);
+    const parent_post = await this.findParentPost(options.parent_id, false);
+    const recipient = await this.userService.findUser(parent_post.authorId);
+    const postWithAuthor = options.post as Post & {
+      author?: { name: string };
+    };
+    const commenterName = postWithAuthor.author?.name ?? 'Someone';
 
-    this.notificationService.create({
-      user: user,
-      description: 'New post created',
+    await this.notificationService.create({
+      user: recipient,
+      description: `${commenterName} commented on your post`,
       type: NotificationType.COMMENT_ADDED,
-      //@ts-expect-error: userService.findUser may not have the correct type
-      description: `${parent_post.author.name} commented on your post`,
     });
   }
 
@@ -218,6 +464,10 @@ export class PostService {
         },
       },
     });
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
     const postWithUserFlags = {
       ...post,
       author: post.author,
@@ -230,7 +480,7 @@ export class PostService {
         : false,
     };
 
-    return postWithUserFlags;
+    return this.withMediaPlayback(postWithUserFlags as PostWithLongPostMedia);
   }
 
   async checkIfUserLikedPost(
@@ -308,7 +558,9 @@ export class PostService {
       };
     });
 
-    return postsWithUserFlags;
+    return this.withMediaPlaybackMany(
+      postsWithUserFlags as PostWithLongPostMedia[],
+    );
   }
 
   async updatePost(params: {
@@ -318,27 +570,13 @@ export class PostService {
   }): Promise<Post> {
     const { data, where } = params;
 
-    const post = await this.prisma.post.update({
+    const { id: postId } = await this.prisma.post.update({
       data,
       where,
-      include: {
-        likedBy: true,
-        bookmarkedBy: true,
-        author: {
-          select: {
-            id: true,
-            name: true,
-            img: true,
-          },
-        },
-        longPost: {
-          select: {
-            id: true,
-            content: true,
-          },
-        },
-      },
+      select: { id: true },
     });
+
+    const post = await this.loadPostAfterWrite(postId);
 
     const postWithUserFlags = {
       ...post,
@@ -350,7 +588,7 @@ export class PostService {
       ),
     };
 
-    return postWithUserFlags;
+    return this.withMediaPlayback(postWithUserFlags as PostWithLongPostMedia);
   }
 
   async likePost(postId: string, email: string): Promise<Post> {
@@ -449,7 +687,18 @@ export class PostService {
       include: { comments: true },
     });
 
-    return post;
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const fileByUrl = await this.fileService.findFilesByUrls(
+      this.collectMediaUrlsFromPosts([post, ...post.comments]),
+    );
+    const enrichedMain = this.enrichPostPlayback(post, fileByUrl);
+    const enrichedComments = post.comments.map((c) =>
+      this.enrichPostPlayback(c, fileByUrl),
+    );
+    return { ...enrichedMain, comments: enrichedComments } as Post;
   }
 
   async deletePost(where: Prisma.PostWhereUniqueInput): Promise<Post> {

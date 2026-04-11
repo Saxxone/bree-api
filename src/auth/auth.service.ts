@@ -6,17 +6,26 @@ import {
 import { UserService } from '../user/user.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { jwtConstants } from './constants';
 import { GoogleAuthUser, AuthUser } from './dto/sign-in.dto';
 import { User } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import * as https from 'https';
 import { join } from 'path';
+import {
+  getMediaStorageDir,
+  resolveFileBaseUrl,
+} from 'src/file/media-storage';
 import * as fs from 'fs';
 import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtPayload } from './auth.guard';
 import { Request } from 'express';
+
+/** JWT signing secrets from env (also imported by AuthModule for JwtModule registration). */
+export const jwtConstants = {
+  secret: process.env.JWT_SECRET || '',
+  refreshSecret: process.env.JWT_REFRESH_SECRET || '',
+};
 
 const EXPIRY = '200d';
 @Injectable()
@@ -360,10 +369,9 @@ export class AuthService {
 
   private createImgPath() {
     const img_name = uuidv4() + '.jpg';
-    const destination = join(__dirname, '../../../../', 'media');
-    const media_base_url = process.env.FILE_BASE_URL;
+    const destination = getMediaStorageDir();
     fs.mkdirSync(destination, { recursive: true });
-    const img_path = `${media_base_url}${img_name}`;
+    const img_path = `${resolveFileBaseUrl()}${img_name}`;
     return { url: img_path, file: join(destination, img_name) };
   }
 
