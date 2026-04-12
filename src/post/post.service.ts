@@ -508,7 +508,7 @@ export class PostService {
         );
       }
 
-      const fileIds = data.media;
+      const fileIds = data.media ?? [];
       const clone = data.longPost?.content;
 
       if (fileIds.length > 0 && data.type !== PostType.LONG) {
@@ -574,7 +574,7 @@ export class PostService {
         await this.fileService.markFileAsUploaded(fileIds);
 
       //Mark uploaded for long posts
-      if (data.type === PostType.LONG && clone.length > 0) {
+      if (data.type === PostType.LONG && clone && clone.length > 0) {
         await Promise.all(
           clone.map(async (c) => {
             await this.fileService.markFileAsUploaded(c.media);

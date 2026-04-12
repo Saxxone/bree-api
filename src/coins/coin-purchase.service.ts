@@ -67,6 +67,11 @@ export class CoinPurchaseService {
         'Package not available for Stripe checkout',
       );
     }
+    if (pkg.stripePriceId.startsWith('prod_')) {
+      throw new BadRequestException(
+        'Coin package is configured with a Stripe Product ID; use a Price ID (price_...) from the product’s Pricing section in the Stripe Dashboard.',
+      );
+    }
 
     const successUrl =
       this.config.get<string>('STRIPE_CHECKOUT_SUCCESS_URL') ??
