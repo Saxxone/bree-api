@@ -54,6 +54,70 @@ async function main() {
     'Default login (unless SEED_* env overrides): admin@example.com / password',
   );
 
+  const coinPackages: Array<{
+    id: string;
+    name: string;
+    coinsMinor: number;
+    sortOrder: number;
+    stripePriceId: string | null;
+    appleProductId: string | null;
+    googleProductId: string | null;
+  }> = [
+    {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Starter',
+      coinsMinor: 500,
+      sortOrder: 10,
+      stripePriceId: process.env.SEED_STRIPE_PRICE_STARTER ?? null,
+      appleProductId: process.env.SEED_APPLE_PRODUCT_STARTER ?? 'com.example.coins.starter',
+      googleProductId: process.env.SEED_GOOGLE_SKU_STARTER ?? 'coins_starter',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000002',
+      name: 'Popular',
+      coinsMinor: 1200,
+      sortOrder: 20,
+      stripePriceId: process.env.SEED_STRIPE_PRICE_POPULAR ?? null,
+      appleProductId: process.env.SEED_APPLE_PRODUCT_POPULAR ?? 'com.example.coins.popular',
+      googleProductId: process.env.SEED_GOOGLE_SKU_POPULAR ?? 'coins_popular',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000003',
+      name: 'Pro',
+      coinsMinor: 3000,
+      sortOrder: 30,
+      stripePriceId: process.env.SEED_STRIPE_PRICE_PRO ?? null,
+      appleProductId: process.env.SEED_APPLE_PRODUCT_PRO ?? 'com.example.coins.pro',
+      googleProductId: process.env.SEED_GOOGLE_SKU_PRO ?? 'coins_pro',
+    },
+  ];
+
+  for (const p of coinPackages) {
+    await prisma.coinPackage.upsert({
+      where: { id: p.id },
+      create: {
+        id: p.id,
+        name: p.name,
+        coinsMinor: p.coinsMinor,
+        sortOrder: p.sortOrder,
+        stripePriceId: p.stripePriceId,
+        appleProductId: p.appleProductId,
+        googleProductId: p.googleProductId,
+        active: true,
+      },
+      update: {
+        name: p.name,
+        coinsMinor: p.coinsMinor,
+        sortOrder: p.sortOrder,
+        stripePriceId: p.stripePriceId,
+        appleProductId: p.appleProductId,
+        googleProductId: p.googleProductId,
+        active: true,
+      },
+    });
+  }
+  console.log('Seeded coin packages:', coinPackages.map((p) => p.name).join(', '));
+
   await prisma.$disconnect();
   await pool.end();
 }

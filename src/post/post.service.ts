@@ -3,6 +3,7 @@ import {
   HttpException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -12,6 +13,7 @@ import {
   Prisma,
   Status as FileStatus,
 } from '@prisma/client';
+import { CoinPricingService } from 'src/coins/coin-pricing.service';
 import { FileService } from 'src/file/file.service';
 import {
   isHttpAccessibleUrl,
@@ -19,6 +21,7 @@ import {
 } from 'src/file/media-storage';
 import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -41,6 +44,8 @@ export type PostMediaMetadataEntry = {
   requiresAuth: boolean;
   /** video / audio only: direct URL vs range streaming */
   playbackMode?: 'direct' | 'stream';
+  /** Coin paywall: no playback URL returned until unlocked */
+  paywalled?: boolean;
 };
 
 type FileRowForPlayback = {
@@ -77,6 +82,8 @@ function parseMediaDirectUrlRequiresAuth(): boolean {
 
 @Injectable()
 export class PostService {
+  private readonly logger = new Logger(PostService.name);
+
   /** Used after writes to avoid concurrent pg `client.query()` on one connection (Prisma adapter-pg + pg ≥8.20). */
   private readonly defaultPostInclude: Prisma.PostInclude = {
     likedBy: true,
@@ -101,6 +108,8 @@ export class PostService {
     private readonly fileService: FileService,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
+    private readonly streamMonetization: StreamMonetizationService,
+    private readonly coinPricing: CoinPricingService,
   ) {}
 
   private loadPostAfterWrite(postId: string) {
@@ -142,6 +151,7 @@ export class PostService {
     media: string[],
     mediaTypes: string[],
     fileByUrl: Map<string, FileRowForPlayback>,
+    lockedFileIds: Set<string>,
   ): {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
@@ -172,6 +182,23 @@ export class PostService {
         file.status !== FileStatus.UPLOADED
           ? true
           : storedUrlIsHttp && this.mediaDirectUrlRequiresAuth;
+
+      if (
+        t &&
+        PostService.STREAMED_MEDIA_TYPES.has(t) &&
+        lockedFileIds.has(file.id)
+      ) {
+        mediaPlayback.push('');
+        mediaMetadata.push({
+          fileId: file.id,
+          sizeBytes: file.size,
+          mimeType: file.mimetype,
+          originalFilename: file.originalname,
+          requiresAuth: true,
+          paywalled: true,
+        });
+        continue;
+      }
 
       if (!t || !PostService.STREAMED_MEDIA_TYPES.has(t)) {
         mediaPlayback.push(directPlaybackUrl);
@@ -205,6 +232,7 @@ export class PostService {
   private enrichPostPlayback(
     post: PostWithLongPostMedia,
     fileByUrl: Map<string, FileRowForPlayback>,
+    lockedFileIds: Set<string>,
   ): PostWithLongPostMedia & {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
@@ -214,6 +242,7 @@ export class PostService {
           post.media,
           post.mediaTypes ?? [],
           fileByUrl,
+          lockedFileIds,
         )
       : { mediaPlayback: [], mediaMetadata: [] };
 
@@ -226,6 +255,7 @@ export class PostService {
                   block.media,
                   block.mediaTypes ?? [],
                   fileByUrl,
+                  lockedFileIds,
                 )
               : {
                   mediaPlayback: [] as string[],
@@ -251,7 +281,131 @@ export class PostService {
     };
   }
 
-  private async withMediaPlayback(post: PostWithLongPostMedia): Promise<
+  private collectVideoUrlsFromPostRecord(post: {
+    media: string[];
+    longPost?: { content?: Array<{ media: string[] }> } | null;
+  }): string[] {
+    const urls = [...(post.media ?? [])];
+    for (const b of post.longPost?.content ?? []) {
+      urls.push(...(b.media ?? []));
+    }
+    return urls.filter(Boolean);
+  }
+
+  /**
+   * Recompute fixed coin price from uploaded video metadata (ffprobe) and post category/tier.
+   */
+  private async syncMonetizationPricingToDb(postId: string): Promise<void> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        longPost: {
+          select: {
+            content: { select: { media: true } },
+          },
+        },
+      },
+    });
+    if (!post) {
+      return;
+    }
+
+    if (!post.monetizationEnabled) {
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          pricedCostMinor: null,
+          sourceStreamQuality: null,
+          videoDurationSeconds: null,
+        },
+      });
+      return;
+    }
+
+    if (!post.videoCategory) {
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          pricedCostMinor: null,
+          sourceStreamQuality: null,
+          videoDurationSeconds: null,
+        },
+      });
+      return;
+    }
+
+    const urls = this.collectVideoUrlsFromPostRecord(post);
+    if (urls.length === 0) {
+      this.logger.warn(
+        `syncMonetizationPricingToDb(${postId}): no media URLs on post (short media + longPost blocks empty)`,
+      );
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          pricedCostMinor: null,
+          sourceStreamQuality: null,
+          videoDurationSeconds: null,
+        },
+      });
+      return;
+    }
+
+    const agg = await this.fileService.aggregateVideoMonetizationInputs(
+      urls,
+      post.authorId,
+    );
+    if (!agg) {
+      this.logger.warn(
+        `syncMonetizationPricingToDb(${postId}): could not aggregate video metadata for ${urls.length} URL(s); check File.url vs post media, ffprobe, and videoCategory`,
+      );
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          pricedCostMinor: null,
+          sourceStreamQuality: null,
+          videoDurationSeconds: null,
+        },
+      });
+      return;
+    }
+
+    const breakdown = this.coinPricing.computeCostMinorForPost(
+      {
+        videoDurationSeconds: agg.totalDurationSeconds,
+        videoCategory: post.videoCategory,
+        productionTier: post.productionTier,
+        baseRateMinorPerMinute: post.baseRateMinorPerMinute,
+      },
+      agg.sourceStreamQuality,
+    );
+
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: {
+        videoDurationSeconds: agg.totalDurationSeconds,
+        sourceStreamQuality: agg.sourceStreamQuality,
+        pricedCostMinor: breakdown.costMinor,
+      },
+    });
+  }
+
+  private async viewerUserIdFromEmail(
+    email?: string,
+  ): Promise<string | undefined> {
+    if (!email) {
+      return undefined;
+    }
+    const u = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    return u?.id;
+  }
+
+  private async withMediaPlayback(
+    post: PostWithLongPostMedia,
+    viewerUserId?: string,
+  ): Promise<
     PostWithLongPostMedia & {
       mediaPlayback: string[];
       mediaMetadata: (PostMediaMetadataEntry | null)[];
@@ -260,10 +414,24 @@ export class PostService {
     const fileByUrl = await this.fileService.findFilesByUrls(
       this.collectMediaUrlsFromPosts([post]),
     );
-    return this.enrichPostPlayback(post, fileByUrl);
+    const locked = await this.streamMonetization.getLockedVideoFileIdsForPostView(
+      {
+        id: post.id,
+        authorId: post.authorId,
+        published: post.published,
+        monetizationEnabled: post.monetizationEnabled,
+        media: post.media ?? [],
+        longPost: post.longPost,
+      },
+      viewerUserId,
+    );
+    return this.enrichPostPlayback(post, fileByUrl, locked);
   }
 
-  private async withMediaPlaybackMany(posts: PostWithLongPostMedia[]): Promise<
+  private async withMediaPlaybackMany(
+    posts: PostWithLongPostMedia[],
+    viewerUserId?: string,
+  ): Promise<
     Array<
       PostWithLongPostMedia & {
         mediaPlayback: string[];
@@ -277,7 +445,23 @@ export class PostService {
     const fileByUrl = await this.fileService.findFilesByUrls(
       this.collectMediaUrlsFromPosts(posts),
     );
-    return posts.map((p) => this.enrichPostPlayback(p, fileByUrl));
+    return Promise.all(
+      posts.map(async (p) => {
+        const locked =
+          await this.streamMonetization.getLockedVideoFileIdsForPostView(
+            {
+              id: p.id,
+              authorId: p.authorId,
+              published: p.published,
+              monetizationEnabled: p.monetizationEnabled,
+              media: p.media ?? [],
+              longPost: p.longPost,
+            },
+            viewerUserId,
+          );
+        return this.enrichPostPlayback(p, fileByUrl, locked);
+      }),
+    );
   }
 
   async createPost(
@@ -300,6 +484,12 @@ export class PostService {
         throw new BadRequestException('Short post cannot be empty');
       } else if (data.type === PostType.LONG && isLongPostEmpty) {
         throw new BadRequestException('Long post cannot be empty');
+      }
+
+      if (data.monetizationEnabled && !data.videoCategory) {
+        throw new BadRequestException(
+          'videoCategory is required when monetization is enabled',
+        );
       }
 
       const fileIds = data.media;
@@ -329,7 +519,7 @@ export class PostService {
           throw new Error('Failed to process long post media.');
         }
       }
-      const { parentId, ...rest } = data;
+      const { parentId, videoDurationSeconds: _clientDuration, ...rest } = data;
       const createData: Prisma.PostCreateInput = {
         parent: parentId ? { connect: { id: parentId } } : undefined,
         ...rest,
@@ -360,8 +550,6 @@ export class PostService {
         select: { id: true },
       });
 
-      const post = await this.loadPostAfterWrite(postId);
-
       //Mark uploaded for short posts
       if (fileIds.length > 0)
         await this.fileService.markFileAsUploaded(fileIds);
@@ -375,6 +563,19 @@ export class PostService {
         );
       }
 
+      await this.syncMonetizationPricingToDb(postId);
+
+      const post = await this.loadPostAfterWrite(postId);
+
+      if (
+        post.monetizationEnabled &&
+        (!post.pricedCostMinor || post.pricedCostMinor <= 0)
+      ) {
+        throw new BadRequestException(
+          'Could not compute a coin price from your videos. Use at least one video file; ensure ffprobe is available (set FFPROBE_PATH if needed).',
+        );
+      }
+
       if (post.parentId) {
         await this.incrementParentPostCommentCount(post.parentId, email);
       }
@@ -385,7 +586,8 @@ export class PostService {
         label: parentId ? 'comment.added' : 'post.created',
       });
 
-      return this.withMediaPlayback(post);
+      const viewerUserId = await this.viewerUserIdFromEmail(email);
+      return this.withMediaPlayback(post, viewerUserId);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -488,7 +690,11 @@ export class PostService {
         : false,
     };
 
-    return this.withMediaPlayback(postWithUserFlags as PostWithLongPostMedia);
+    const viewerUserId = await this.viewerUserIdFromEmail(email);
+    return this.withMediaPlayback(
+      postWithUserFlags as PostWithLongPostMedia,
+      viewerUserId,
+    );
   }
 
   async checkIfUserLikedPost(
@@ -566,8 +772,12 @@ export class PostService {
       };
     });
 
+    const viewerUserId = await this.viewerUserIdFromEmail(
+      params.currentUserEmail,
+    );
     return this.withMediaPlaybackMany(
       postsWithUserFlags as PostWithLongPostMedia[],
+      viewerUserId,
     );
   }
 
@@ -584,6 +794,8 @@ export class PostService {
       select: { id: true },
     });
 
+    await this.syncMonetizationPricingToDb(postId);
+
     const post = await this.loadPostAfterWrite(postId);
 
     const postWithUserFlags = {
@@ -596,7 +808,11 @@ export class PostService {
       ),
     };
 
-    return this.withMediaPlayback(postWithUserFlags as PostWithLongPostMedia);
+    const viewerUserId = await this.viewerUserIdFromEmail(params.email);
+    return this.withMediaPlayback(
+      postWithUserFlags as PostWithLongPostMedia,
+      viewerUserId,
+    );
   }
 
   async likePost(postId: string, email: string): Promise<Post> {
@@ -702,9 +918,9 @@ export class PostService {
     const fileByUrl = await this.fileService.findFilesByUrls(
       this.collectMediaUrlsFromPosts([post, ...post.comments]),
     );
-    const enrichedMain = this.enrichPostPlayback(post, fileByUrl);
+    const enrichedMain = this.enrichPostPlayback(post, fileByUrl, new Set());
     const enrichedComments = post.comments.map((c) =>
-      this.enrichPostPlayback(c, fileByUrl),
+      this.enrichPostPlayback(c, fileByUrl, new Set()),
     );
     return { ...enrichedMain, comments: enrichedComments } as Post;
   }

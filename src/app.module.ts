@@ -21,6 +21,7 @@ import { RoomModule } from './room/room.module';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
+import { CoinsModule } from './coins/coins.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { PrismaService } from './prisma/prisma.service';
     NotificationModule,
     ChatModule,
     RoomModule,
+    CoinsModule,
   ],
   controllers: [AppController],
   providers: [

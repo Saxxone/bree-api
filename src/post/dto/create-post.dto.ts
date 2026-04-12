@@ -1,4 +1,9 @@
-import { PostType, LongPostBlock } from '@prisma/client';
+import {
+  PostType,
+  LongPostBlock,
+  VideoCategory,
+  ProductionTier,
+} from '@prisma/client';
 import {
   IsString,
   ValidateNested,
@@ -34,4 +39,20 @@ export class CreatePostDto {
   @Allow()
   @IsString()
   type?: PostType;
+
+  @Allow()
+  monetizationEnabled?: boolean;
+
+  /** Ignored for pricing: duration comes from ffprobe on uploaded video files. */
+  @Allow()
+  videoDurationSeconds?: number;
+
+  @Allow()
+  videoCategory?: VideoCategory;
+
+  @Allow()
+  productionTier?: ProductionTier;
+
+  @Allow()
+  baseRateMinorPerMinute?: number;
 }

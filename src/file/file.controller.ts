@@ -19,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Public } from 'src/auth/auth.guard';
+import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
 import { Status } from '@prisma/client';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { compressFiles } from './file.manager';
@@ -72,7 +73,10 @@ const storage = diskStorage({
 
 @Controller('file')
 export class FileController {
-  constructor(private readonly fileService: FileService) {}
+  constructor(
+    private readonly fileService: FileService,
+    private readonly streamMonetization: StreamMonetizationService,
+  ) {}
 
   @UseInterceptors(
     AnyFilesInterceptor({
@@ -181,6 +185,9 @@ export class FileController {
     const user = (req as ExpressRequest & { user?: { userId?: string } }).user;
     const file = await this.fileService.findForStream(id);
     this.fileService.assertStreamAccess(file, user);
+    if (file.type === 'video' || file.type === 'audio') {
+      await this.streamMonetization.assertStreamAllowed(file.id, user?.userId);
+    }
     await this.pipeRangedFile(file.path, file.mimetype, req, res, headOnly);
   }
 
@@ -194,6 +201,9 @@ export class FileController {
     const file = await this.fileService.findForStreamByFilename(filename);
     if (file.status !== Status.UPLOADED) {
       this.fileService.assertStreamAccess(file, user);
+    }
+    if (file.type === 'video' || file.type === 'audio') {
+      await this.streamMonetization.assertStreamAllowed(file.id, user?.userId);
     }
     await this.pipeRangedFile(file.path, file.mimetype, req, res, headOnly);
   }

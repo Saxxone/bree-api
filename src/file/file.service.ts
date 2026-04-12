@@ -7,11 +7,17 @@ import {
 } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, Status, File as FileModel } from '@prisma/client';
+import { Prisma, Status, File as FileModel, StreamQuality } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
+import { resolve, isAbsolute } from 'path';
 import { UpdateFileDto } from './dto/update-file.dto';
-import { resolveFileBaseUrl } from './media-storage';
+import { getMediaStorageDir, resolveFileBaseUrl } from './media-storage';
+import {
+  dimensionsToStreamQuality,
+  extractFilenameFromMediaUrl,
+  probeVideoFile,
+} from './video-probe';
 
 @Injectable()
 export class FileService {
@@ -81,6 +87,15 @@ export class FileService {
           },
         } as Prisma.FileCreateInput,
       });
+      if (savedFile.type === 'video') {
+        await this.probeAndPersistVideoMetadata(savedFile.id, savedFile.path).catch(
+          (err) => {
+            this.logger.warn(
+              `Video probe failed for file ${savedFile.id}: ${err}`,
+            );
+          },
+        );
+      }
       savedFiles.push(savedFile.id);
     }
 
@@ -120,9 +135,162 @@ export class FileService {
           throw new NotFoundException('File not found');
         }
 
+        if (file.type === 'video') {
+          await this.probeAndPersistVideoMetadata(file.id, file.path).catch(
+            (err) => {
+              this.logger.warn(
+                `Video probe failed after upload for file ${file.id}: ${err}`,
+              );
+            },
+          );
+        }
+
         return file.status;
       }),
     );
+  }
+
+  /**
+   * ffprobe the file on disk and persist width/height/duration for video pricing.
+   */
+  private resolveDiskPathForProbe(storedPath: string): string {
+    const trimmed = storedPath?.trim() ?? '';
+    if (!trimmed) {
+      return trimmed;
+    }
+    return isAbsolute(trimmed) ? resolve(trimmed) : resolve(getMediaStorageDir(), trimmed);
+  }
+
+  async probeAndPersistVideoMetadata(
+    fileId: string,
+    absolutePath: string,
+  ): Promise<{ width: number; height: number; durationSeconds: number } | null> {
+    const diskPath = this.resolveDiskPathForProbe(absolutePath);
+    const result = await probeVideoFile(diskPath);
+    if (!result) {
+      this.logger.warn(
+        `ffprobe returned no metadata for file ${fileId} at ${diskPath} (check FFPROBE_PATH / ffmpeg install)`,
+      );
+      return null;
+    }
+    await this.prisma.file.update({
+      where: { id: fileId },
+      data: {
+        videoWidth: result.width,
+        videoHeight: result.height,
+        videoDurationSeconds: result.durationSeconds,
+      },
+    });
+    return result;
+  }
+
+  private static streamQualityRank(q: StreamQuality): number {
+    const r: Record<StreamQuality, number> = { P720: 1, P1080: 2, P4K: 3 };
+    return r[q];
+  }
+
+  private static maxStreamQuality(a: StreamQuality, b: StreamQuality): StreamQuality {
+    return FileService.streamQualityRank(a) >= FileService.streamQualityRank(b)
+      ? a
+      : b;
+  }
+
+  /**
+   * Sum durations and take the highest resolution tier across all video files
+   * referenced by URL/path (for fixed post pricing).
+   */
+  async aggregateVideoMonetizationInputs(
+    urls: string[],
+    ownerUserId?: string,
+  ): Promise<{
+    totalDurationSeconds: number;
+    sourceStreamQuality: StreamQuality;
+  } | null> {
+    const unique = [...new Set(urls.filter(Boolean))];
+    if (unique.length === 0) {
+      return null;
+    }
+
+    const filenames = [
+      ...new Set(
+        unique
+          .map((u) => extractFilenameFromMediaUrl(u))
+          .filter((f): f is string => !!f),
+      ),
+    ];
+
+    const urlOrPathMatch: Prisma.FileWhereInput[] = [
+      { url: { in: unique } },
+      { path: { in: unique } },
+    ];
+    if (filenames.length > 0 && ownerUserId) {
+      urlOrPathMatch.push({
+        filename: { in: filenames },
+        ownerId: ownerUserId,
+      });
+    }
+
+    const files = await this.prisma.file.findMany({
+      where: {
+        AND: [
+          { OR: urlOrPathMatch },
+          {
+            OR: [{ type: 'video' }, { mimetype: { startsWith: 'video/' } }],
+          },
+          { status: { not: Status.DELETED } },
+        ],
+      },
+      select: {
+        id: true,
+        path: true,
+        videoWidth: true,
+        videoHeight: true,
+        videoDurationSeconds: true,
+      },
+    });
+
+    const deduped = [...new Map(files.map((f) => [f.id, f])).values()];
+    if (deduped.length === 0) {
+      this.logger.warn(
+        `aggregateVideoMonetizationInputs: no video File rows for urls=${JSON.stringify(unique.slice(0, 3))}${unique.length > 3 ? '…' : ''} owner=${ownerUserId ?? 'n/a'}`,
+      );
+      return null;
+    }
+
+    let totalDuration = 0;
+    let quality: StreamQuality = StreamQuality.P720;
+
+    for (const f of deduped) {
+      let w = f.videoWidth;
+      let h = f.videoHeight;
+      let d = f.videoDurationSeconds;
+      if (w == null || h == null || d == null) {
+        const probed = await this.probeAndPersistVideoMetadata(f.id, f.path);
+        if (probed) {
+          w = probed.width;
+          h = probed.height;
+          d = probed.durationSeconds;
+        }
+      }
+      if (w != null && h != null && d != null && d > 0) {
+        totalDuration += d;
+        quality = FileService.maxStreamQuality(
+          quality,
+          dimensionsToStreamQuality(w, h),
+        );
+      }
+    }
+
+    if (totalDuration <= 0) {
+      this.logger.warn(
+        `aggregateVideoMonetizationInputs: ${deduped.length} file(s) found but duration/geometry still missing after ffprobe`,
+      );
+      return null;
+    }
+    return {
+      totalDurationSeconds: totalDuration,
+      sourceStreamQuality: quality,
+    };
   }
 
   findAll() {
@@ -194,6 +362,9 @@ export class FileService {
         originalname: true,
         filename: true,
         status: true,
+        videoWidth: true,
+        videoHeight: true,
+        videoDurationSeconds: true,
       },
     });
     type Row = {
@@ -205,6 +376,9 @@ export class FileService {
       filename: string;
       url: string;
       status: Status;
+      videoWidth: number | null;
+      videoHeight: number | null;
+      videoDurationSeconds: number | null;
     };
     const map = new Map<string, Row>();
     for (const f of files) {
@@ -217,6 +391,9 @@ export class FileService {
         filename: f.filename,
         url: f.url,
         status: f.status,
+        videoWidth: f.videoWidth,
+        videoHeight: f.videoHeight,
+        videoDurationSeconds: f.videoDurationSeconds,
       };
       map.set(f.url, row);
       map.set(f.path, row);

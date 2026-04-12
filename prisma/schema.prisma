@@ -40,30 +40,45 @@ model User {
   LongPost                  LongPost[]
   AuthToken                 AuthToken[]
   notifications             Notification[]
+  coinWallet                CoinWallet?
+  coinPurchases             CoinPurchase[]
+  postUnlocks               PostUnlock[]
 }
 
 model Post {
-  id            String    @id @default(uuid())
-  text          String?
-  media         String[]
-  mediaTypes    String[]
-  published     Boolean?  @default(false)
-  author        User      @relation(fields: [authorId], references: [id])
-  authorId      String
-  likedBy       User[]    @relation("likedPosts")
-  likeCount     Int       @default(0)
-  bookmarkedBy  User[]    @relation("bookmarkedPosts")
-  bookmarkCount Int       @default(0)
-  parent        Post?     @relation("comments", fields: [parentId], references: [id])
-  parentId      String?
-  comments      Post[]    @relation("comments")
-  commentCount  Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-  type          PostType  @default(SHORT)
-  longPost      LongPost? @relation(fields: [longPostId], references: [id])
-  longPostId    String?
+  id                       String           @id @default(uuid())
+  text                     String?
+  media                    String[]
+  mediaTypes               String[]
+  published                Boolean?         @default(false)
+  author                   User             @relation(fields: [authorId], references: [id])
+  authorId                 String
+  likedBy                  User[]           @relation("likedPosts")
+  likeCount                Int              @default(0)
+  bookmarkedBy             User[]           @relation("bookmarkedPosts")
+  bookmarkCount            Int              @default(0)
+  parent                   Post?            @relation("comments", fields: [parentId], references: [id])
+  parentId                 String?
+  comments                 Post[]           @relation("comments")
+  commentCount             Int              @default(0)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  deletedAt                DateTime?
+  type                     PostType         @default(SHORT)
+  longPost                 LongPost?        @relation(fields: [longPostId], references: [id])
+  longPostId               String?
+  monetizationEnabled      Boolean          @default(false)
+  /// Total duration of attached videos (seconds), derived from uploaded file probes when monetized.
+  videoDurationSeconds     Int?
+  videoCategory            VideoCategory?
+  productionTier           ProductionTier   @default(STANDARD)
+  /// Override default COIN_BASE_RATE_MINOR_PER_MIN when set.
+  baseRateMinorPerMinute   Int?
+  /// Inferred from uploaded video resolution (max across assets). Used for the single fixed viewer price.
+  sourceStreamQuality      StreamQuality?
+  /// Fixed coin cost (minor units) shown to viewers; set when the post is saved with monetization.
+  pricedCostMinor          Int?
+  postUnlocks              PostUnlock[]
 }
 
 model LongPost {
@@ -86,20 +101,23 @@ model LongPostBlock {
 }
 
 model File {
-  id           String    @id @default(uuid())
-  originalname String
-  filename     String
-  size         Int
-  type         String
-  url          String
-  path         String
-  mimetype     String
-  status       Status    @default(PENDING)
-  owner        User      @relation(fields: [ownerId], references: [id])
-  ownerId      String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id                    String    @id @default(uuid())
+  originalname          String
+  filename              String
+  size                  Int
+  type                  String
+  url                   String
+  path                  String
+  mimetype              String
+  status                Status    @default(PENDING)
+  owner                 User      @relation(fields: [ownerId], references: [id])
+  ownerId               String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  videoWidth            Int?
+  videoHeight           Int?
+  videoDurationSeconds  Int?
 }
 
 model Chat {
@@ -196,4 +214,109 @@ enum NotificationType {
   POST_LIKED
   COMMENT_ADDED
   USER_MENTIONED
+}
+
+enum VideoCategory {
+  ENTERTAINMENT
+  EDUCATIONAL_DIY
+  LIVE_EVENT
+}
+
+enum StreamQuality {
+  P720
+  P1080
+  P4K
+}
+
+enum ProductionTier {
+  STANDARD
+  PRO
+}
+
+enum CoinTxnType {
+  PURCHASE_STRIPE
+  PURCHASE_APPLE
+  PURCHASE_GOOGLE
+  SPEND_UNLOCK
+  CREATOR_EARN
+  ADJUSTMENT
+}
+
+enum CoinPurchaseProvider {
+  STRIPE
+  APPLE
+  GOOGLE
+}
+
+enum CoinPurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model CoinWallet {
+  id             String            @id @default(uuid())
+  userId         String            @unique
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceMinor   Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  ledgerEntries  CoinLedgerEntry[]
+}
+
+model CoinLedgerEntry {
+  id                String       @id @default(uuid())
+  walletId          String
+  wallet            CoinWallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              CoinTxnType
+  /// Signed: credit positive, debit negative.
+  amountMinor       Int
+  balanceAfterMinor Int
+  idempotencyKey    String       @unique
+  metadata          Json?
+  createdAt         DateTime     @default(now())
+}
+
+model CoinPackage {
+  id              String          @id @default(uuid())
+  name            String
+  coinsMinor      Int
+  stripePriceId   String?
+  appleProductId  String?
+  googleProductId String?
+  active          Boolean         @default(true)
+  sortOrder       Int             @default(0)
+  purchases       CoinPurchase[]
+}
+
+model CoinPurchase {
+  id         String               @id @default(uuid())
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId  String
+  package    CoinPackage          @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  provider   CoinPurchaseProvider
+  externalId String
+  status     CoinPurchaseStatus   @default(PENDING)
+  coinsMinor Int
+  createdAt  DateTime             @default(now())
+
+  @@unique([provider, externalId])
+}
+
+model PostUnlock {
+  id                         String   @id @default(uuid())
+  userId                     String
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId                     String
+  post                       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  maxStreamQuality           StreamQuality
+  /// Total coins debited from viewer for this post (initial + quality upgrades).
+  totalPaidMinor             Int      @default(0)
+  /// Cumulative platform share (30%) of totalPaidMinor, for reporting.
+  platformFeeAccumulatedMinor Int     @default(0)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([userId, postId])
 }

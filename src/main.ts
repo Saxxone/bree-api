@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import { ui_base_url } from 'utils';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: [ui_base_url, 'http://localhost:4000', '*'],
