@@ -38,7 +38,10 @@ export class AuthController {
   @Public()
   @Post('login')
   async signIn(@Body() signInDto: SignInDto) {
-    return await this.authService.signIn(signInDto.email, signInDto.password);
+    return await this.authService.signIn(
+      signInDto.usernameOrEmail,
+      signInDto.password,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -55,7 +58,10 @@ export class AuthController {
   @Public()
   @Post('logout')
   async signOut(@Body() signInDto: SignInDto) {
-    return await this.authService.signOut(signInDto.email, signInDto.password);
+    return await this.authService.signOut(
+      signInDto.usernameOrEmail,
+      signInDto.password,
+    );
   }
 
   @UseGuards(AuthGuard)

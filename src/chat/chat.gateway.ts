@@ -1,9 +1,11 @@
+import { UseFilters } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
   MessageBody,
 } from '@nestjs/websockets';
+import { FriendlyWsExceptionFilter } from '../health/ws-friendly-exception.filter';
 import { Server } from 'socket.io';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { ChatService } from './chat.service';
@@ -15,6 +17,7 @@ import { ChatService } from './chat.service';
     transports: ['websocket'],
   },
 })
+@UseFilters(FriendlyWsExceptionFilter)
 export class ChatGateway {
   constructor(private readonly chatService: ChatService) {}
 

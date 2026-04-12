@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { StreamQuality } from '@prisma/client';
+import { resolveFfprobePath } from './media-binary-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -23,25 +24,6 @@ export function extractFilenameFromMediaUrl(url: string): string | null {
   } catch {
     return null;
   }
-}
-
-function resolveFfprobePath(): string {
-  const fromEnv = process.env.FFPROBE_PATH?.trim();
-  if (fromEnv) {
-    return fromEnv;
-  }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const installer = require('@ffprobe-installer/ffprobe') as {
-      path: string;
-    };
-    if (installer?.path) {
-      return installer.path;
-    }
-  } catch {
-    /* optional dependency resolution */
-  }
-  return 'ffprobe';
 }
 
 /**

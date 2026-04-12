@@ -120,6 +120,9 @@ export class PostService {
   }
 
   private static readonly STREAMED_MEDIA_TYPES = new Set(['video', 'audio']);
+  private static readonly NO_STREAM_FALLBACK_FROM_POST_TYPES = new Set([
+    'image',
+  ]);
   private readonly videoDirectPlaybackMaxBytes =
     parseVideoDirectPlaybackMaxBytes();
   private readonly mediaDirectUrlRequiresAuth =
@@ -152,6 +155,8 @@ export class PostService {
     mediaTypes: string[],
     fileByUrl: Map<string, FileRowForPlayback>,
     lockedFileIds: Set<string>,
+    /** When true, video/audio must carry auth on /file/media/* so monetization can verify unlock (direct URLs otherwise omit ?token=). */
+    postMonetizationEnabled: boolean,
   ): {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
@@ -183,11 +188,14 @@ export class PostService {
           ? true
           : storedUrlIsHttp && this.mediaDirectUrlRequiresAuth;
 
-      if (
-        t &&
-        PostService.STREAMED_MEDIA_TYPES.has(t) &&
-        lockedFileIds.has(file.id)
-      ) {
+      const streamedFromFile = PostService.STREAMED_MEDIA_TYPES.has(file.type);
+      const streamedFromPost =
+        Boolean(t) &&
+        PostService.STREAMED_MEDIA_TYPES.has(t as string) &&
+        !PostService.NO_STREAM_FALLBACK_FROM_POST_TYPES.has(file.type);
+      const isStreamedMedia = streamedFromFile || streamedFromPost;
+
+      if (isStreamedMedia && lockedFileIds.has(file.id)) {
         mediaPlayback.push('');
         mediaMetadata.push({
           fileId: file.id,
@@ -200,7 +208,7 @@ export class PostService {
         continue;
       }
 
-      if (!t || !PostService.STREAMED_MEDIA_TYPES.has(t)) {
+      if (!isStreamedMedia) {
         mediaPlayback.push(directPlaybackUrl);
         mediaMetadata.push({
           fileId: file.id,
@@ -213,6 +221,10 @@ export class PostService {
       }
 
       const useStreaming = file.size > this.videoDirectPlaybackMaxBytes;
+      let requiresAuth = useStreaming ? true : directRequiresAuth;
+      if (postMonetizationEnabled && isStreamedMedia) {
+        requiresAuth = true;
+      }
       mediaPlayback.push(
         useStreaming ? this.streamUrlForFileId(file.id) : directPlaybackUrl,
       );
@@ -221,7 +233,7 @@ export class PostService {
         sizeBytes: file.size,
         mimeType: file.mimetype,
         originalFilename: file.originalname,
-        requiresAuth: useStreaming ? true : directRequiresAuth,
+        requiresAuth,
         playbackMode: useStreaming ? 'stream' : 'direct',
       });
     }
@@ -237,12 +249,14 @@ export class PostService {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
   } {
+    const monetizedPost = post.monetizationEnabled === true;
     const { mediaPlayback, mediaMetadata } = post.media?.length
       ? this.buildMediaPlaybackAndMetadata(
           post.media,
           post.mediaTypes ?? [],
           fileByUrl,
           lockedFileIds,
+          monetizedPost,
         )
       : { mediaPlayback: [], mediaMetadata: [] };
 
@@ -256,6 +270,7 @@ export class PostService {
                   block.mediaTypes ?? [],
                   fileByUrl,
                   lockedFileIds,
+                  monetizedPost,
                 )
               : {
                   mediaPlayback: [] as string[],
@@ -414,17 +429,18 @@ export class PostService {
     const fileByUrl = await this.fileService.findFilesByUrls(
       this.collectMediaUrlsFromPosts([post]),
     );
-    const locked = await this.streamMonetization.getLockedVideoFileIdsForPostView(
-      {
-        id: post.id,
-        authorId: post.authorId,
-        published: post.published,
-        monetizationEnabled: post.monetizationEnabled,
-        media: post.media ?? [],
-        longPost: post.longPost,
-      },
-      viewerUserId,
-    );
+    const locked =
+      await this.streamMonetization.getLockedVideoFileIdsForPostView(
+        {
+          id: post.id,
+          authorId: post.authorId,
+          published: post.published,
+          monetizationEnabled: post.monetizationEnabled,
+          media: post.media ?? [],
+          longPost: post.longPost,
+        },
+        viewerUserId,
+      );
     return this.enrichPostPlayback(post, fileByUrl, locked);
   }
 
@@ -516,10 +532,13 @@ export class PostService {
           }));
         } catch (error) {
           console.error('Error uploading files:', error);
-          throw new Error('Failed to process long post media.');
+          throw new BadRequestException(
+            'We could not attach your media to this post. Check that files uploaded correctly and try again.',
+          );
         }
       }
-      const { parentId, videoDurationSeconds: _clientDuration, ...rest } = data;
+      const { parentId, videoDurationSeconds, ...rest } = data;
+      void videoDurationSeconds;
       const createData: Prisma.PostCreateInput = {
         parent: parentId ? { connect: { id: parentId } } : undefined,
         ...rest,

@@ -33,9 +33,13 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async signIn(email: string, pass: string): Promise<Partial<AuthUser>> {
-    console.log(email, pass);
-    const user = await this.userService.findUser(email, { withPassword: true });
+  async signIn(
+    usernameOrEmail: string,
+    pass: string,
+  ): Promise<Partial<AuthUser>> {
+    const user = await this.userService.findUser(usernameOrEmail, {
+      withPassword: true,
+    });
 
     if (!user) {
       throw new UnauthorizedException();
@@ -55,8 +59,10 @@ export class AuthService {
     };
   }
 
-  async signOut(email: string, pass: string): Promise<any> {
-    const user = await this.userService.findUser(email, { withPassword: true });
+  async signOut(usernameOrEmail: string, pass: string): Promise<any> {
+    const user = await this.userService.findUser(usernameOrEmail, {
+      withPassword: true,
+    });
 
     if (!user) {
       throw new UnauthorizedException();
@@ -189,8 +195,10 @@ export class AuthService {
       const newAccessToken =
         await this.generateAccessToken(refreshTokenPayload);
       return { access_token: newAccessToken };
-    } catch (error) {
-      throw new UnauthorizedException(error);
+    } catch {
+      throw new UnauthorizedException(
+        'Your session could not be refreshed. Please sign in again.',
+      );
     }
   }
 
@@ -247,7 +255,7 @@ export class AuthService {
       }
 
       request['user'] = payload;
-    } catch (error) {
+    } catch {
       if (!is_public) {
         try {
           const refresh_token_payload: JwtPayload =
@@ -298,11 +306,16 @@ export class AuthService {
 
           request['user'] = refresh_token_payload;
           request.headers.authorization = `Bearer ${new_access_token}`;
-        } catch {
-          throw new UnauthorizedException(error);
+        } catch (inner) {
+          if (inner instanceof UnauthorizedException) {
+            throw inner;
+          }
+          throw new UnauthorizedException(
+            'Invalid or expired session. Please sign in again.',
+          );
         }
       } else {
-        throw new UnauthorizedException(error);
+        return;
       }
     }
   }

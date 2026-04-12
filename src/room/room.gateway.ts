@@ -1,3 +1,4 @@
+import { UseFilters } from '@nestjs/common';
 import {
   WebSocketGateway,
   SubscribeMessage,
@@ -5,9 +6,10 @@ import {
   ConnectedSocket,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { FriendlyWsExceptionFilter } from '../health/ws-friendly-exception.filter';
 import { RoomService } from './room.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { ui_base_url } from 'utils';
+import { ui_base_url } from '../utils';
 import { JoinRoomDto } from '../room/dto/update-room.dto';
 import { Socket, Server } from 'socket.io';
 
@@ -18,6 +20,7 @@ import { Socket, Server } from 'socket.io';
     transports: ['websocket'],
   },
 })
+@UseFilters(FriendlyWsExceptionFilter)
 export class RoomGateway {
   constructor(private readonly roomService: RoomService) {}
 

@@ -13,7 +13,6 @@ import { CoinPurchaseService } from './coin-purchase.service';
 import { CoinUnlockService } from './coin-unlock.service';
 import { CoinWalletService } from './coin-wallet.service';
 import { StripeCheckoutDto } from './dto/stripe-checkout.dto';
-import { UnlockPostDto } from './dto/unlock-post.dto';
 import { VerifyAppleDto } from './dto/verify-apple.dto';
 import { VerifyGoogleDto } from './dto/verify-google.dto';
 
@@ -56,7 +55,6 @@ export class CoinsController {
   async unlockPost(
     @Request() req: { user: { userId: string } },
     @Param('postId') postId: string,
-    @Body() _body: UnlockPostDto,
   ) {
     return this.unlock.unlockPost(req.user.userId, postId);
   }

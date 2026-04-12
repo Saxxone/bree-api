@@ -1,12 +1,12 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import sharp from 'sharp';
 import { randomUUID } from 'crypto';
 import { join, dirname, extname } from 'path';
-import { constants } from 'fs';
+import { resolveFfmpegPath } from './media-binary-path';
 
-const execPromise = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export async function compressFiles(
   files: Array<Express.Multer.File>,
@@ -101,12 +101,27 @@ export async function compressVideo(file: Express.Multer.File) {
 export async function compressAudio(file: Express.Multer.File) {
   const uniqueId = randomUUID();
   const outputPath = `${file.path}_${uniqueId}_compressed.mp3`;
+  const ffmpeg = resolveFfmpegPath();
 
   try {
-    const command = `ffmpeg -i "${file.path}" -vn -ar 44100 -ab 128k -c:a libmp3lame "${outputPath}"`;
-    await execPromise(command);
+    await execFileAsync(
+      ffmpeg,
+      [
+        '-i',
+        file.path,
+        '-vn',
+        '-ar',
+        '44100',
+        '-ab',
+        '128k',
+        '-c:a',
+        'libmp3lame',
+        outputPath,
+      ],
+      { maxBuffer: 50 * 1024 * 1024 },
+    );
 
-    await fs.unlink(file.path); // Use await
+    await fs.unlink(file.path);
     await fs.rename(outputPath, file.path);
 
     const fileExtension = extname(file.originalname);
@@ -118,11 +133,21 @@ export async function compressAudio(file: Express.Multer.File) {
     console.log(`Compressed audio: ${file.originalname}`);
   } catch (error) {
     console.error(`Error compressing audio ${file.originalname}:`, error);
-    if (error instanceof Error && (error as any).stderr) {
-      console.error('FFmpeg stderr:', (error as any).stderr);
+    const stderr =
+      error &&
+      typeof error === 'object' &&
+      'stderr' in error &&
+      (error as { stderr?: Buffer }).stderr
+        ? String((error as { stderr: Buffer }).stderr)
+        : '';
+    if (stderr) {
+      console.error('FFmpeg stderr:', stderr);
     }
 
-    await fs.access(outputPath, constants.F_OK);
-    await fs.unlink(outputPath);
+    try {
+      await fs.unlink(outputPath);
+    } catch {
+      /* no partial output */
+    }
   }
 }

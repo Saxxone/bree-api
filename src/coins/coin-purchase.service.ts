@@ -236,7 +236,9 @@ export class CoinPurchaseService {
 
     if (!res.ok) {
       const text = await res.text();
-      this.logger.warn(`Apple transaction lookup failed: ${res.status} ${text}`);
+      this.logger.warn(
+        `Apple transaction lookup failed: ${res.status} ${text}`,
+      );
       throw new BadRequestException('Invalid or unknown Apple transaction');
     }
 

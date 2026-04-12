@@ -1,9 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import {
-  ProductionTier,
-  StreamQuality,
-  VideoCategory,
-} from '@prisma/client';
+import { ProductionTier, StreamQuality, VideoCategory } from '@prisma/client';
 import { CoinPricingService } from './coin-pricing.service';
 
 describe('CoinPricingService', () => {

@@ -7,7 +7,12 @@ import {
 } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, Status, File as FileModel, StreamQuality } from '@prisma/client';
+import {
+  Prisma,
+  Status,
+  File as FileModel,
+  StreamQuality,
+} from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
 import { resolve, isAbsolute } from 'path';
@@ -88,13 +93,14 @@ export class FileService {
         } as Prisma.FileCreateInput,
       });
       if (savedFile.type === 'video') {
-        await this.probeAndPersistVideoMetadata(savedFile.id, savedFile.path).catch(
-          (err) => {
-            this.logger.warn(
-              `Video probe failed for file ${savedFile.id}: ${err}`,
-            );
-          },
-        );
+        await this.probeAndPersistVideoMetadata(
+          savedFile.id,
+          savedFile.path,
+        ).catch((err) => {
+          this.logger.warn(
+            `Video probe failed for file ${savedFile.id}: ${err}`,
+          );
+        });
       }
       savedFiles.push(savedFile.id);
     }
@@ -158,13 +164,19 @@ export class FileService {
     if (!trimmed) {
       return trimmed;
     }
-    return isAbsolute(trimmed) ? resolve(trimmed) : resolve(getMediaStorageDir(), trimmed);
+    return isAbsolute(trimmed)
+      ? resolve(trimmed)
+      : resolve(getMediaStorageDir(), trimmed);
   }
 
   async probeAndPersistVideoMetadata(
     fileId: string,
     absolutePath: string,
-  ): Promise<{ width: number; height: number; durationSeconds: number } | null> {
+  ): Promise<{
+    width: number;
+    height: number;
+    durationSeconds: number;
+  } | null> {
     const diskPath = this.resolveDiskPathForProbe(absolutePath);
     const result = await probeVideoFile(diskPath);
     if (!result) {
@@ -189,7 +201,10 @@ export class FileService {
     return r[q];
   }
 
-  private static maxStreamQuality(a: StreamQuality, b: StreamQuality): StreamQuality {
+  private static maxStreamQuality(
+    a: StreamQuality,
+    b: StreamQuality,
+  ): StreamQuality {
     return FileService.streamQualityRank(a) >= FileService.streamQualityRank(b)
       ? a
       : b;
@@ -315,16 +330,42 @@ export class FileService {
     ) {
       throw new BadRequestException('Invalid filename');
     }
-    const file = await this.prisma.file.findFirst({
-      where: {
-        filename: rawName,
-        status: { not: Status.DELETED },
-      },
-    });
-    if (!file) {
-      throw new NotFoundException('File not found');
+    const candidates = FileService.filenameLookupCandidates(rawName);
+    for (const name of candidates) {
+      const file = await this.prisma.file.findFirst({
+        where: {
+          filename: name,
+          status: { not: Status.DELETED },
+        },
+      });
+      if (file) {
+        return file;
+      }
     }
-    return file;
+    throw new NotFoundException('File not found');
+  }
+
+  /**
+   * Express decodes path params, but clients may still send over-escaped names
+   * (e.g. %2520). Try a few safe variants so /file/media/* matches /file/stream/:id.
+   */
+  private static filenameLookupCandidates(rawName: string): string[] {
+    const trimmed = rawName.trim();
+    const out: string[] = [];
+    const add = (s: string) => {
+      if (s && !out.includes(s)) {
+        out.push(s);
+      }
+    };
+    add(trimmed);
+    if (trimmed.includes('%')) {
+      try {
+        add(decodeURIComponent(trimmed));
+      } catch {
+        /* ignore */
+      }
+    }
+    return out;
   }
 
   /** Row fields needed for post playback URLs and video metadata. */
@@ -405,11 +446,12 @@ export class FileService {
     file: FileModel,
     user: { userId?: string } | undefined,
   ): void {
-    if (!user?.userId) {
-      throw new ForbiddenException();
-    }
+    // Match GET /api/file/media/:filename — public UPLOADED files need no user.
     if (file.status === Status.UPLOADED) {
       return;
+    }
+    if (!user?.userId) {
+      throw new ForbiddenException();
     }
     if (file.ownerId === user.userId) {
       return;

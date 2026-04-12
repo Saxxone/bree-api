@@ -1,7 +1,13 @@
 import { User } from '@prisma/client';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class SignInDto {
-  email: string;
+  @IsString()
+  @IsNotEmpty()
+  usernameOrEmail: string;
+
+  @IsString()
+  @IsNotEmpty()
   password: string;
 }
 

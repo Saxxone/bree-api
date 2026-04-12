@@ -208,6 +208,46 @@ export class FileController {
     await this.pipeRangedFile(file.path, file.mimetype, req, res, headOnly);
   }
 
+  /**
+   * Parse the first range in `Range` (RFC 7233). Returns null so caller can fall back
+   * to 200 full body when the header is absent or unusable.
+   */
+  private static parseSingleByteRange(
+    range: string | undefined,
+    fileSize: number,
+  ): { start: number; end: number } | null {
+    if (!range || fileSize <= 0) return null;
+    const r = range.trim();
+    if (!r.toLowerCase().startsWith('bytes=')) return null;
+    const first = r.slice(6).split(',')[0].trim();
+
+    const suffix = /^-(\d+)$/.exec(first);
+    if (suffix) {
+      const len = parseInt(suffix[1], 10);
+      if (!Number.isFinite(len) || len <= 0) return null;
+      const start = Math.max(0, fileSize - len);
+      const end = fileSize - 1;
+      if (start > end) return null;
+      return { start, end };
+    }
+
+    const std = /^(\d+)-(\d*)$/.exec(first);
+    if (!std) return null;
+    const start = parseInt(std[1], 10);
+    let end = std[2] !== '' ? parseInt(std[2], 10) : fileSize - 1;
+    if (
+      Number.isNaN(start) ||
+      Number.isNaN(end) ||
+      start < 0 ||
+      start >= fileSize ||
+      start > end
+    ) {
+      return null;
+    }
+    end = Math.min(end, fileSize - 1);
+    return { start, end };
+  }
+
   private async pipeRangedFile(
     absolutePath: string,
     mimetype: string | null,
@@ -226,24 +266,19 @@ export class FileController {
     const contentType = mimetype || 'application/octet-stream';
     const range = req.headers.range;
 
-    if (range) {
-      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
-      if (!match) {
-        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
-        return;
-      }
-      const start = parseInt(match[1], 10);
-      let end = match[2] !== '' ? parseInt(match[2], 10) : fileSize - 1;
+    const setInlinePlaybackHeaders = () => {
       if (
-        Number.isNaN(start) ||
-        Number.isNaN(end) ||
-        start >= fileSize ||
-        start > end
+        contentType.startsWith('video/') ||
+        contentType.startsWith('audio/')
       ) {
-        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
-        return;
+        res.setHeader('Content-Disposition', 'inline');
       }
-      end = Math.min(end, fileSize - 1);
+    };
+
+    const parsedRange = FileController.parseSingleByteRange(range, fileSize);
+
+    if (parsedRange) {
+      const { start, end } = parsedRange;
       const chunkSize = end - start + 1;
 
       res.status(206);
@@ -251,6 +286,7 @@ export class FileController {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Length', chunkSize);
       res.setHeader('Content-Type', contentType);
+      setInlinePlaybackHeaders();
       if (headOnly) {
         res.end();
         return;
@@ -261,11 +297,14 @@ export class FileController {
         else res.destroy();
       });
       stream.pipe(res);
+    } else if (range) {
+      res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
     } else {
       res.status(200);
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Length', fileSize);
       res.setHeader('Content-Type', contentType);
+      setInlinePlaybackHeaders();
       if (headOnly) {
         res.end();
         return;

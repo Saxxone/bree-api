@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Post, ProductionTier, StreamQuality, VideoCategory } from '@prisma/client';
+import {
+  Post,
+  ProductionTier,
+  StreamQuality,
+  VideoCategory,
+} from '@prisma/client';
 
 /** Integer multipliers: 10 = 1.0x, 12 = 1.2x, etc. Denominator 10 per axis. */
 const QUALITY_NUM: Record<StreamQuality, number> = {
@@ -83,11 +88,7 @@ export class CoinPricingService {
     const p = PRODUCTION_NUM[post.productionTier];
 
     const numerator =
-      baseRateMinorPerMinute *
-      post.videoDurationSeconds *
-      q *
-      c *
-      p;
+      baseRateMinorPerMinute * post.videoDurationSeconds * q * c * p;
     const denominator = 60 * 10 * 10 * 10;
     const costMinor = Math.round(numerator / denominator);
 

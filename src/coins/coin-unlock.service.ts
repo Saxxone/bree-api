@@ -31,7 +31,9 @@ export class CoinUnlockService {
       throw new BadRequestException('Post is not monetized');
     }
     if (post.authorId === viewerUserId) {
-      throw new BadRequestException('Author does not need to unlock own content');
+      throw new BadRequestException(
+        'Author does not need to unlock own content',
+      );
     }
 
     const price = post.pricedCostMinor;
@@ -41,9 +43,7 @@ export class CoinUnlockService {
       );
     }
 
-    const sourceQuality =
-      post.sourceStreamQuality ??
-      StreamQuality.P1080;
+    const sourceQuality = post.sourceStreamQuality ?? StreamQuality.P1080;
 
     const existing = await this.prisma.postUnlock.findUnique({
       where: {
@@ -82,7 +82,12 @@ export class CoinUnlockService {
         creatorMinor,
         CoinTxnType.CREATOR_EARN,
         `unlock:earn:${postId}:${post.authorId}:${correlation}`,
-        { postId, viewerUserId, creatorMinor, sourceStreamQuality: sourceQuality },
+        {
+          postId,
+          viewerUserId,
+          creatorMinor,
+          sourceStreamQuality: sourceQuality,
+        },
       );
 
       await tx.postUnlock.create({
@@ -171,7 +176,10 @@ export class CoinUnlockService {
     };
   }
 
-  async hasUnlockedPost(viewerUserId: string, postId: string): Promise<boolean> {
+  async hasUnlockedPost(
+    viewerUserId: string,
+    postId: string,
+  ): Promise<boolean> {
     const row = await this.prisma.postUnlock.findUnique({
       where: { userId_postId: { userId: viewerUserId, postId } },
     });

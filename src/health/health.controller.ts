@@ -8,7 +8,7 @@ import {
   MemoryHealthIndicator,
 } from '@nestjs/terminus';
 import { Public } from 'src/auth/auth.guard';
-import { api_base_url, ui_base_url } from 'utils';
+import { api_base_url, ui_base_url } from '../utils';
 
 @Controller('health')
 export class HealthController {
