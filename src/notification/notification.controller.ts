@@ -20,7 +20,12 @@ import {
   NotificationObject,
   NotificationTypes,
 } from './dto/create-notification.dto';
+import {
+  RegisterPushTokenDto,
+  RemovePushTokenDto,
+} from './dto/register-push-token.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
+import { ExpoPushService } from './expo-push.service';
 import { NotificationService } from './notification.service';
 import type { JwtPayload } from 'src/auth/auth.guard';
 
@@ -29,6 +34,7 @@ export class NotificationController {
   constructor(
     private readonly notificationService: NotificationService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly expoPushService: ExpoPushService,
   ) {}
 
   @Cron('* * 0 * * *', {
@@ -62,6 +68,19 @@ export class NotificationController {
     return this.notificationService.create(createNotificationDto);
   }
 
+  @Post('push-token')
+  async registerPushToken(
+    @Request() req: { user: JwtPayload },
+    @Body() body: RegisterPushTokenDto,
+  ) {
+    await this.expoPushService.registerToken(
+      req.user.userId,
+      body.token,
+      body.platform ?? 'unknown',
+    );
+    return { ok: true as const };
+  }
+
   @Get()
   findAll(
     @Request() req: { user: JwtPayload },
@@ -93,6 +112,15 @@ export class NotificationController {
     @Body() updateNotificationDto: UpdateNotificationDto,
   ) {
     return this.notificationService.update(id, updateNotificationDto);
+  }
+
+  @Delete('push-token')
+  async removePushToken(
+    @Request() req: { user: JwtPayload },
+    @Body() body: RemovePushTokenDto,
+  ) {
+    await this.expoPushService.unregisterToken(req.user.userId, body.token);
+    return { ok: true as const };
   }
 
   @Delete(':id')

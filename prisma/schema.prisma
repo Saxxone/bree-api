@@ -48,9 +48,11 @@ model User {
   LongPost                  LongPost[]
   AuthToken                 AuthToken[]
   notifications             Notification[]
+  pushDevices               PushDevice[]
   coinWallet                CoinWallet?
   coinPurchases             CoinPurchase[]
   postUnlocks               PostUnlock[]
+  postWatchHistory          PostWatchHistory[]
 }
 
 model Post {
@@ -87,6 +89,7 @@ model Post {
   /// Fixed coin cost (minor units) shown to viewers; set when the post is saved with monetization.
   pricedCostMinor          Int?
   postUnlocks              PostUnlock[]
+  watchHistory             PostWatchHistory[]
 }
 
 model LongPost {
@@ -135,6 +138,8 @@ model Chat {
   id                    String                     @id @default(uuid())
   to                    User                       @relation("chatRecipient", fields: [toUserId], references: [id])
   from                  User                       @relation("chatSender", fields: [fromUserId], references: [id])
+  /// AES-GCM bundle (base64): iv + ciphertext + tag; used with hybrid E2EE. Null = legacy RSA-only body in user rows.
+  encryptedPayload      String?                    @db.Text
   text                  String?
   media                 String?
   mediaType             String[]
@@ -218,6 +223,18 @@ model Notification {
   mentionedUserId String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+}
+
+model PushDevice {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  expoPushToken  String   @unique
+  platform       String   @default("unknown")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
 }
 
 enum NotificationType {
@@ -332,4 +349,16 @@ model PostUnlock {
   updatedAt                  DateTime @updatedAt
 
   @@unique([userId, postId])
+}
+
+model PostWatchHistory {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId        String
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  lastWatchedAt DateTime @default(now()) @updatedAt
+
+  @@unique([userId, postId])
+  @@index([userId, lastWatchedAt])
 }

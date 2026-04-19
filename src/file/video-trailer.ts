@@ -14,11 +14,16 @@ export function trailerClipSeconds(
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
     return 0;
   }
-  const cap = Number.isFinite(maxSeconds) && maxSeconds > 0 ? maxSeconds : DEFAULT_MAX_SECONDS;
+  const cap =
+    Number.isFinite(maxSeconds) && maxSeconds > 0
+      ? maxSeconds
+      : DEFAULT_MAX_SECONDS;
   return Math.max(1, Math.min(cap, Math.round(durationSeconds)));
 }
 
-export async function probeHasAudioStream(absolutePath: string): Promise<boolean> {
+export async function probeHasAudioStream(
+  absolutePath: string,
+): Promise<boolean> {
   const ffprobe = resolveFfprobePath();
   try {
     const { stdout } = await execFileAsync(

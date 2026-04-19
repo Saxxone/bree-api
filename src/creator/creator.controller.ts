@@ -54,7 +54,10 @@ export class CreatorController {
     @Query('type') typeRaw?: string,
   ) {
     const skip = Math.min(parseInt(skipRaw ?? '0', 10) || 0, 100_000);
-    const take = Math.min(Math.max(parseInt(takeRaw ?? '50', 10) || 50, 1), 200);
+    const take = Math.min(
+      Math.max(parseInt(takeRaw ?? '50', 10) || 50, 1),
+      200,
+    );
     const type = parseLedgerType(typeRaw);
     return this.creatorWallet.getLedger(req.user.userId, { skip, take, type });
   }

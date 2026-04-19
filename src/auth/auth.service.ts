@@ -65,7 +65,9 @@ export class AuthService {
   async signInSuperAdmin(
     usernameOrEmail: string,
     pass: string,
-  ): Promise<Partial<AuthUser> & { access_token: string; refresh_token: string }> {
+  ): Promise<
+    Partial<AuthUser> & { access_token: string; refresh_token: string }
+  > {
     const row = await this.userService.findUser(usernameOrEmail, {
       withPassword: true,
     });

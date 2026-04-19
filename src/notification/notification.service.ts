@@ -4,12 +4,14 @@ import { NotificationType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
+import { ExpoPushService } from './expo-push.service';
 
 @Injectable()
 export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly expoPushService: ExpoPushService,
   ) {}
 
   async create(createNotificationDto: CreateNotificationDto) {
@@ -65,6 +67,20 @@ export class NotificationService {
         default:
           break;
       }
+
+      void this.expoPushService
+        .sendForNotification({
+          recipientUserId: user.id,
+          title: 'afovid',
+          body: notification.description.slice(0, 200),
+          data: {
+            notificationId: notification.id,
+            postId: notification.postId ?? '',
+            commentId: notification.commentId ?? '',
+            type: notification.type,
+          },
+        })
+        .catch(() => undefined);
 
       return notification;
     } catch (error) {

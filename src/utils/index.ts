@@ -16,4 +16,3 @@ export const socket_io_cors_origins = [
     'http://localhost:4020',
   ]),
 ];
-

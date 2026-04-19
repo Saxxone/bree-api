@@ -19,7 +19,7 @@ export class CreatorStripeConnectService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
 
   private getStripe(): StripeClient {
     if (this.stripe) {

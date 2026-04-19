@@ -181,7 +181,8 @@ export class PostController {
   }
 
   /**
-   * @returns post feed in descending order based on the skip and take values
+   * @returns post feed ranked by content class (video, root posts, replies) then recency;
+   * when `cursor` is set, falls back to chronological listing for stable cursor semantics.
    */
   @Public()
   @Post('feed')
@@ -196,14 +197,21 @@ export class PostController {
       take: takeQ,
       cursor: cursorQ,
     });
-    return await this.postService.getMultiplePosts({
-      where: { published: true },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      skip: page.skip,
-      take: page.take,
-      cursor: page.cursor,
+    if (page.cursor) {
+      return await this.postService.getMultiplePosts({
+        where: { published: true },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip: page.skip,
+        take: page.take,
+        cursor: page.cursor,
+        currentUserEmail: req.user?.sub,
+      });
+    }
+    return await this.postService.getFeedPosts({
+      skip: page.skip ?? 0,
+      take: page.take ?? 10,
       currentUserEmail: req.user?.sub,
     });
   }

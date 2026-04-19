@@ -25,6 +25,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { getFeedRankingConfig } from './feed-ranking.config';
 
 /** Post as returned from queries that may include `longPost.content` (playback URLs). */
 type PostWithLongPostMedia = Post & {
@@ -1020,6 +1021,89 @@ export class PostService {
     );
   }
 
+  /**
+   * Published home feed: video first, then root posts (and boosted replies), then other replies.
+   * Ordering is defined in SQL below; pagination uses skip/take only (see controller for cursor fallback).
+   */
+  async getFeedPosts(params: {
+    skip: number;
+    take: number;
+    currentUserEmail?: string;
+  }): Promise<Post[]> {
+    const { skip, take, currentUserEmail } = params;
+    const cfg = getFeedRankingConfig();
+
+    const ranked = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT p.id
+        FROM "Post" p
+        WHERE p."published" = true
+          AND p."deletedAt" IS NULL
+        ORDER BY
+          (
+            CASE
+              WHEN (
+                (p.type::text = 'SHORT' AND 'video' = ANY (p."mediaTypes"))
+                OR (
+                  p."longPostId" IS NOT NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM "LongPostBlock" lpb
+                    WHERE lpb."longPostId" = p."longPostId"
+                      AND 'video' = ANY (lpb."mediaTypes")
+                  )
+                )
+              ) THEN 3
+              WHEN p."parentId" IS NULL THEN 2
+              WHEN (
+                p."likeCount" * ${cfg.likeWeight}
+                + p."commentCount" * ${cfg.commentWeight}
+                + p."bookmarkCount" * ${cfg.bookmarkWeight}
+              ) >= ${cfg.replyBoostMinScore} THEN 2
+              ELSE 1
+            END
+          ) DESC,
+          p."createdAt" DESC,
+          p.id DESC
+        OFFSET ${skip}::int
+        LIMIT ${take}::int
+      `,
+    );
+
+    const ids = ranked.map((r) => r.id);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: { id: { in: ids } },
+      include: this.defaultPostInclude,
+    });
+    const byId = new Map(posts.map((p) => [p.id, p]));
+    const ordered: typeof posts = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (row) ordered.push(row);
+    }
+
+    const postsWithUserFlags = ordered.map((post) => ({
+      ...post,
+      author: post.author,
+      likedByMe: currentUserEmail
+        ? post.likedBy.some((user) => user.email === currentUserEmail)
+        : false,
+      bookmarkedByMe: currentUserEmail
+        ? post.bookmarkedBy.some((user) => user.email === currentUserEmail)
+        : false,
+    }));
+
+    const viewerUserId = await this.viewerUserIdFromEmail(currentUserEmail);
+    return this.withMediaPlaybackMany(
+      postsWithUserFlags as PostWithLongPostMedia[],
+      viewerUserId,
+    );
+  }
+
   async updatePost(params: {
     where: Prisma.PostWhereUniqueInput;
     data: Prisma.PostUpdateInput;
@@ -1135,9 +1219,7 @@ export class PostService {
       await this.checkIfUserBookmarkedPost(postId, email)
     ).status;
     const targetBookmarked =
-      desiredBookmarked !== undefined
-        ? desiredBookmarked
-        : !bookmarkedBefore;
+      desiredBookmarked !== undefined ? desiredBookmarked : !bookmarkedBefore;
 
     if (targetBookmarked === bookmarkedBefore) {
       return await this.viewSinglePost(postId, email);

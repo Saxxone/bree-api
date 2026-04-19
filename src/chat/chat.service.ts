@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Chat, Status } from '@prisma/client';
@@ -15,16 +15,34 @@ export class ChatService {
   ) {}
 
   async create(new_chat: CreateChatDto): Promise<Chat> {
-    const { media, mediaType } = new_chat;
+    const { media, mediaType, encryptedPayload } = new_chat;
     const sender = await this.userService.findUser(new_chat.fromUserId);
     const receiver = await this.userService.findUser(new_chat.toUserId);
+
+    if (!sender || !receiver) {
+      throw new BadRequestException('Sender or receiver not found');
+    }
+
+    const senderEnc = this.normalizeEncryptedSegment(
+      new_chat.senderEncryptedMessage,
+      'senderEncryptedMessage',
+    );
+    const receiverEnc = this.normalizeEncryptedSegment(
+      new_chat.receiverEncryptedMessage,
+      'receiverEncryptedMessage',
+    );
 
     const room = new_chat.roomId
       ? await this.roomService.findOne(new_chat.roomId)
       : await this.roomService.create(sender, receiver);
 
+    if (!room?.id) {
+      throw new BadRequestException('Room could not be resolved');
+    }
+
     const created_chat = await this.prisma.chat.create({
       data: {
+        ...(encryptedPayload && { encryptedPayload }),
         ...(media && { media }),
         ...(mediaType && { mediaType: [mediaType] }),
         status: Status.SENT,
@@ -47,15 +65,11 @@ export class ChatService {
           create: [
             {
               user: { connect: { id: sender.id } },
-              encryptedMessage: await this.arrayBufferToBase64(
-                new_chat.senderEncryptedMessage,
-              ),
+              encryptedMessage: senderEnc,
             },
             {
               user: { connect: { id: receiver.id } },
-              encryptedMessage: await this.arrayBufferToBase64(
-                new_chat.receiverEncryptedMessage,
-              ),
+              encryptedMessage: receiverEnc,
             },
           ],
         },
@@ -76,8 +90,20 @@ export class ChatService {
     return created_chat;
   }
 
-  async arrayBufferToBase64(message: ArrayBuffer): Promise<string> {
-    return Buffer.from(message).toString('base64');
+  /**
+   * Accepts base64 string from Socket.IO JSON clients, or ArrayBuffer for legacy callers.
+   */
+  private normalizeEncryptedSegment(
+    value: string | ArrayBuffer | undefined,
+    field: string,
+  ): string {
+    if (value === undefined || value === null) {
+      throw new BadRequestException(`Missing ${field}`);
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    return Buffer.from(value).toString('base64');
   }
 
   async findAll(to: 'uuid', from: 'email') {

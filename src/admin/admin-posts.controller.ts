@@ -58,7 +58,10 @@ export class AdminPostsController {
     @Query('take') takeRaw?: string,
   ) {
     const skip = Math.min(parseInt(skipRaw ?? '0', 10) || 0, 100_000);
-    const take = Math.min(Math.max(parseInt(takeRaw ?? '30', 10) || 30, 1), 100);
+    const take = Math.min(
+      Math.max(parseInt(takeRaw ?? '30', 10) || 30, 1),
+      100,
+    );
 
     const where: Prisma.PostWhereInput = { deletedAt: null };
     if (publishedRaw === 'true') where.published = true;
@@ -123,22 +126,17 @@ export class AdminPostsController {
       this.prisma.post.count({ where }),
     ]);
 
-    const listItems = items.map(
-      ({ longPost, mediaTypes, ...rest }) => ({
-        ...rest,
-        mediaTypes,
-        hasVideo: postRecordHasVideoMedia({ mediaTypes, longPost }),
-      }),
-    );
+    const listItems = items.map(({ longPost, mediaTypes, ...rest }) => ({
+      ...rest,
+      mediaTypes,
+      hasVideo: postRecordHasVideoMedia({ mediaTypes, longPost }),
+    }));
 
     return { items: listItems, total, skip, take };
   }
 
   @Get(':id')
-  async getOne(
-    @Param('id') id: string,
-    @Request() req: { user: JwtPayload },
-  ) {
+  async getOne(@Param('id') id: string, @Request() req: { user: JwtPayload }) {
     return this.postService.viewSinglePost(id, req.user.sub);
   }
 

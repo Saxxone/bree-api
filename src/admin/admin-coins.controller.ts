@@ -124,7 +124,10 @@ export class AdminCoinsController {
     @Query('take') takeRaw?: string,
   ) {
     const skip = Math.min(parseInt(skipRaw ?? '0', 10) || 0, 100_000);
-    const take = Math.min(Math.max(parseInt(takeRaw ?? '50', 10) || 50, 1), 200);
+    const take = Math.min(
+      Math.max(parseInt(takeRaw ?? '50', 10) || 50, 1),
+      200,
+    );
 
     const walletFilter = userId ? { userId } : undefined;
 

@@ -1,8 +1,4 @@
-import {
-  PostType,
-  VideoCategory,
-  ProductionTier,
-} from '@prisma/client';
+import { PostType, VideoCategory, ProductionTier } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsString,

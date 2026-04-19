@@ -11,28 +11,23 @@ export class AdminDashboardController {
   async summary() {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const [
-      usersTotal,
-      postsTotal,
-      postsMonetized,
-      filesByStatus,
-      ledger24h,
-    ] = await this.prisma.$transaction([
-      this.prisma.user.count({ where: { deletedAt: null } }),
-      this.prisma.post.count({ where: { deletedAt: null } }),
-      this.prisma.post.count({
-        where: { deletedAt: null, monetizationEnabled: true },
-      }),
-      this.prisma.file.groupBy({
-        by: ['status'],
-        _count: { id: true },
-      }),
-      this.prisma.coinLedgerEntry.aggregate({
-        where: { createdAt: { gte: since24h } },
-        _sum: { amountMinor: true },
-        _count: { id: true },
-      }),
-    ]);
+    const [usersTotal, postsTotal, postsMonetized, filesByStatus, ledger24h] =
+      await this.prisma.$transaction([
+        this.prisma.user.count({ where: { deletedAt: null } }),
+        this.prisma.post.count({ where: { deletedAt: null } }),
+        this.prisma.post.count({
+          where: { deletedAt: null, monetizationEnabled: true },
+        }),
+        this.prisma.file.groupBy({
+          by: ['status'],
+          _count: { id: true },
+        }),
+        this.prisma.coinLedgerEntry.aggregate({
+          where: { createdAt: { gte: since24h } },
+          _sum: { amountMinor: true },
+          _count: { id: true },
+        }),
+      ]);
 
     return {
       usersTotal,

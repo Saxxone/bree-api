@@ -35,7 +35,7 @@ export class CreatorPayoutService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly wallet: CoinWalletService,
-  ) { }
+  ) {}
 
   private getStripe(): StripeClient {
     if (this.stripe) {

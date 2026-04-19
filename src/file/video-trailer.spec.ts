@@ -1,7 +1,4 @@
-import {
-  buildFfmpegTrailerArgs,
-  trailerClipSeconds,
-} from './video-trailer';
+import { buildFfmpegTrailerArgs, trailerClipSeconds } from './video-trailer';
 
 describe('trailerClipSeconds', () => {
   it('caps at maxSeconds', () => {

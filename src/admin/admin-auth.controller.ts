@@ -31,9 +31,9 @@ export class AdminAuthController {
 
   @UseGuards(SuperAdminGuard)
   @Get('me')
-  async me(@Request() req: { user: { userId: string } }): Promise<
-    Omit<User, 'password'>
-  > {
+  async me(
+    @Request() req: { user: { userId: string } },
+  ): Promise<Omit<User, 'password'>> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: req.user.userId },
     });

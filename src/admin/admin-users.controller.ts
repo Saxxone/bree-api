@@ -33,7 +33,10 @@ export class AdminUsersController {
     @Query('take') takeRaw?: string,
   ) {
     const skip = Math.min(parseInt(skipRaw ?? '0', 10) || 0, 100_000);
-    const take = Math.min(Math.max(parseInt(takeRaw ?? '30', 10) || 30, 1), 100);
+    const take = Math.min(
+      Math.max(parseInt(takeRaw ?? '30', 10) || 30, 1),
+      100,
+    );
     const where = q?.trim()
       ? {
           OR: [

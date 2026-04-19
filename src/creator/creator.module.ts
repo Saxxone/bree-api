@@ -8,11 +8,7 @@ import { CreatorStripeConnectService } from './creator-stripe-connect.service';
 import { CreatorWalletService } from './creator-wallet.service';
 
 @Module({
-  imports: [
-    ConfigModule,
-    PrismaModule,
-    forwardRef(() => CoinsModule),
-  ],
+  imports: [ConfigModule, PrismaModule, forwardRef(() => CoinsModule)],
   controllers: [CreatorController],
   providers: [
     CreatorWalletService,

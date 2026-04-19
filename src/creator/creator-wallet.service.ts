@@ -99,7 +99,12 @@ export class CreatorWalletService {
   async getLedger(
     userId: string,
     opts: { skip: number; take: number; type?: CoinTxnType },
-  ): Promise<{ items: CreatorLedgerRow[]; total: number; skip: number; take: number }> {
+  ): Promise<{
+    items: CreatorLedgerRow[];
+    total: number;
+    skip: number;
+    take: number;
+  }> {
     const wallet = await this.prisma.coinWallet.findUnique({
       where: { userId },
       select: { id: true },

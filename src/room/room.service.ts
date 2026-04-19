@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { Room, User } from '@prisma/client';
+import { Room, RoomType, User } from '@prisma/client';
 import { UserService } from '../user/user.service';
 
 @Injectable()
@@ -27,16 +27,32 @@ export class RoomService {
           ],
         },
       },
+      include: {
+        participants: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            img: true,
+            verified: true,
+            publicKey: true,
+            name: true,
+          },
+        },
+        chats: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            userEncryptedMessages: true,
+          },
+        },
+      },
     });
 
     return room;
   }
 
-  findAllWithParticipant(
-    email: string,
-    skip: number = 0,
-    take: number = 50,
-  ) {
+  findAllWithParticipant(email: string, skip: number = 0, take: number = 50) {
     const s = Math.max(0, skip);
     const t = Math.min(Math.max(1, take), 100);
     return this.prisma.room.findMany({
@@ -151,6 +167,9 @@ export class RoomService {
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
+          include: {
+            userEncryptedMessages: true,
+          },
         },
       },
     }) ?? null);
@@ -171,10 +190,16 @@ export class RoomService {
 
     const existingRoom = await this.prisma.room.findFirst({
       where: {
-        participants: {
-          some: { id: user1Id },
-          every: { id: user2Id },
-        },
+        roomType: RoomType.PRIVATE,
+        AND: [
+          { participants: { some: { id: user1Id } } },
+          { participants: { some: { id: user2Id } } },
+          {
+            participants: {
+              every: { id: { in: [user1Id, user2Id] } },
+            },
+          },
+        ],
       },
       include: {
         participants: {
@@ -191,11 +216,13 @@ export class RoomService {
         chats: {
           take: 1,
           orderBy: { createdAt: 'desc' },
+          include: {
+            userEncryptedMessages: true,
+          },
         },
       },
     });
 
-    console.log(existingRoom);
     if (existingRoom) {
       return existingRoom;
     }

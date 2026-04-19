@@ -21,7 +21,9 @@ import { CreatorStripeConnectService } from 'src/creator/creator-stripe-connect.
 import { CoinWalletService } from './coin-wallet.service';
 
 type StripeClient = InstanceType<typeof Stripe>;
-type StripeWebhookEvent = ReturnType<StripeClient['webhooks']['constructEvent']>;
+type StripeWebhookEvent = ReturnType<
+  StripeClient['webhooks']['constructEvent']
+>;
 
 @Injectable()
 export class CoinPurchaseService {
