@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta http-equiv="x-ua-compatible" content="ie=edge">
-        <title>Bree API documentation</title>
+        <title>afovid API documentation</title>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -64,7 +64,7 @@
 
         <div class="navbar navbar-default navbar-fixed-top d-md-none p-0">
                <div class="d-flex">
-                    <a href="../" class="navbar-brand">Bree API documentation</a>
+                    <a href="../" class="navbar-brand">afovid API documentation</a>
                     <button type="button" class="btn btn-default btn-menu ion-ios-menu" id="btn-menu"></button>
                </div>
         </div>
@@ -461,7 +461,7 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () &#x3D;&gt; this.http.pingCheck(&#x27;bree-api&#x27;, this.url + &#x27;/hello&#x27;),
+      () &#x3D;&gt; this.http.pingCheck(&#x27;afovid-api&#x27;, this.url + &#x27;/hello&#x27;),
     ]);
   }
 
@@ -472,7 +472,7 @@ export class HealthController {
     return this.health.check([
       () &#x3D;&gt;
         this.http.responseCheck(
-          &#x27;bree-web&#x27;,
+          &#x27;afovid-web&#x27;,
           this.ui_url + &#x27;/login&#x27;,
           (res) &#x3D;&gt; res.status &#x3D;&#x3D;&#x3D; 200,
         ),
@@ -484,7 +484,7 @@ export class HealthController {
   @HealthCheck()
   databaseCheck() {
     return this.health.check([
-      () &#x3D;&gt; this.http.pingCheck(&#x27;bree-db&#x27;, &#x27;database&#x27;),
+      () &#x3D;&gt; this.http.pingCheck(&#x27;afovid-db&#x27;, &#x27;database&#x27;),
     ]);
   }
 

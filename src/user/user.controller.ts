@@ -5,7 +5,6 @@ import {
   Post,
   Body,
   Put,
-  Delete,
   Query,
   Request,
 } from '@nestjs/common';
@@ -50,10 +49,13 @@ export class UserController {
         where: {
           OR: [
             {
-              name: { contains: encodeURIComponent(search_string.trim()) },
+              name: { contains: search_string.trim(), mode: 'insensitive' },
             },
             {
-              username: { contains: encodeURIComponent(search_string.trim()) },
+              username: {
+                contains: search_string.trim(),
+                mode: 'insensitive',
+              },
             },
           ],
         },
@@ -104,8 +106,4 @@ export class UserController {
     });
   }
 
-  @Delete('post/:id')
-  async deletePost(@Param('id') id: string): Promise<UserModel> {
-    return this.userService.deleteUser({ id: String(id) });
-  }
 }

@@ -9,10 +9,41 @@ import {
   Query,
   Request,
 } from '@nestjs/common';
-import { Post as PostModel } from '@prisma/client';
+import { Post as PostModel, Prisma } from '@prisma/client';
 import { Public } from 'src/auth/auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostService } from './post.service';
+
+function parseLikeStatus(
+  status: string | boolean | string[] | undefined,
+): boolean | undefined {
+  if (status === undefined) return undefined;
+  const v = Array.isArray(status) ? status[0] : status;
+  if (v === true || v === 'true' || v === '1') return true;
+  if (v === false || v === 'false' || v === '0') return false;
+  return undefined;
+}
+
+function parsePostListPagination(q: {
+  skip?: number | string;
+  take?: number | string;
+  cursor?: string | string[];
+}): { skip?: number; take?: number; cursor?: Prisma.PostWhereUniqueInput } {
+  const take = Math.min(Math.max(Number(q.take) || 10, 1), 100);
+  const skipRaw = Math.max(Number(q.skip) || 0, 0);
+  const raw = q.cursor;
+  const cursorStr =
+    raw == null ? '' : Array.isArray(raw) ? String(raw[0] ?? '') : String(raw);
+  const trimmed = cursorStr.trim();
+  if (trimmed) {
+    return {
+      take,
+      skip: 1,
+      cursor: { id: trimmed },
+    };
+  }
+  return { take, skip: skipRaw, cursor: undefined };
+}
 
 @Controller('posts')
 export class PostController {
@@ -70,16 +101,50 @@ export class PostController {
   async bookmarkPost(
     @Param('id') id: string,
     @Request() req: any,
+    @Query('status') status?: string | boolean | string[],
   ): Promise<PostModel> {
-    return await this.postService.bookmarkPost(id, req.user.sub);
+    return await this.postService.bookmarkPost(
+      id,
+      req.user.sub,
+      parseLikeStatus(status),
+    );
   }
 
   @Put('like/:id')
   async likePost(
     @Param('id') id: string,
     @Request() req: any,
+    @Query('status') status?: string | boolean | string[],
   ): Promise<PostModel> {
-    return await this.postService.likePost(id, req.user.sub);
+    return await this.postService.likePost(
+      id,
+      req.user.sub,
+      parseLikeStatus(status),
+    );
+  }
+
+  /** Must be registered before `@Get('/:id')` so `/posts/comments/:id` matches. */
+  @Get('/comments/:id')
+  async getCommentsForPost(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
+  ): Promise<PostModel[]> {
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
+    return await this.postService.getMultiplePosts({
+      where: { parent: { id: id } },
+      orderBy: { createdAt: 'desc' },
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
+      currentUserEmail: req.user?.sub,
+    });
   }
 
   @Public()
@@ -89,17 +154,6 @@ export class PostController {
     @Request() req: any,
   ): Promise<PostModel> {
     return await this.postService.viewSinglePost(id, req.user?.sub);
-  }
-
-  @Get('/comments/:id')
-  async getCommentsForPost(
-    @Request() req: any,
-    @Param('id') id: string,
-  ): Promise<PostModel[]> {
-    return await this.postService.getMultiplePosts({
-      where: { parent: { id: id } },
-      currentUserEmail: req.user?.sub,
-    });
   }
 
   @Post('/check-like/:id')
@@ -133,16 +187,23 @@ export class PostController {
   @Post('feed')
   async getPublishedPosts(
     @Request() req: any,
-    @Query('skip') skip?: number,
-    @Query('take') take?: number,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
   ): Promise<PostModel[]> {
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
     return await this.postService.getMultiplePosts({
       where: { published: true },
       orderBy: {
         createdAt: 'desc',
       },
-      skip: Number(skip) || 0,
-      take: Number(take) || 10,
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
       currentUserEmail: req.user?.sub,
     });
   }
@@ -155,10 +216,16 @@ export class PostController {
   async getUserPosts(
     @Param('id') id: string,
     @Request() req: any,
-    @Query('skip') skip?: number,
-    @Query('take') take?: number,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
   ): Promise<PostModel[]> {
     const searchTerm = id.startsWith('@') ? id.substring(1) : id;
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
     return await this.postService.getMultiplePosts({
       where: {
         published: true,
@@ -167,8 +234,9 @@ export class PostController {
       orderBy: {
         createdAt: 'desc',
       },
-      skip: Number(skip) || 0,
-      take: Number(take) || 10,
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
       currentUserEmail: req.user.sub,
     });
   }
@@ -177,26 +245,68 @@ export class PostController {
   async getFilteredPosts(
     @Request() req: any,
     @Query('q') q?: string,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
   ): Promise<PostModel[]> {
-    const cleanedQuery = q.trim().replace(/[^a-zA-Z0-9\s]/g, ' ');
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
+    const raw = (q ?? '').trim();
+    if (!raw) {
+      return await this.postService.getMultiplePosts({
+        where: { published: true },
+        orderBy: { createdAt: 'desc' },
+        skip: page.skip,
+        take: page.take,
+        cursor: page.cursor,
+        currentUserEmail: req.user.sub,
+      });
+    }
 
-    const query =
-      cleanedQuery.split(/[ \+]/).length > 1
-        ? cleanedQuery.split(' ').join(' | ')
-        : cleanedQuery;
+    const cleanedQuery = raw.replace(/[^a-zA-Z0-9\s]/g, ' ');
+    const terms = cleanedQuery.split(/\s+/).filter(Boolean);
+    if (!terms.length) {
+      return await this.postService.getMultiplePosts({
+        where: { published: true },
+        orderBy: { createdAt: 'desc' },
+        skip: page.skip,
+        take: page.take,
+        cursor: page.cursor,
+        currentUserEmail: req.user.sub,
+      });
+    }
+
+    const textClause =
+      terms.length <= 1
+        ? {
+            text: {
+              contains: terms[0] ?? cleanedQuery,
+              mode: 'insensitive' as const,
+            },
+          }
+        : {
+            OR: terms.map((term) => ({
+              text: { contains: term, mode: 'insensitive' as const },
+            })),
+          };
 
     return await this.postService.getMultiplePosts({
       where: {
         published: true,
-        text: {
-          search: query,
-        },
+        ...textClause,
       },
+      orderBy: { createdAt: 'desc' },
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
       currentUserEmail: req.user.sub,
     });
   }
 
-  @Delete('post/:id')
+  @Delete(':id')
   async deletePost(@Param('id') id: string): Promise<PostModel> {
     return await this.postService.deletePost({ id: String(id) });
   }

@@ -198,14 +198,24 @@ export class FileController {
     headOnly: boolean,
   ) {
     const user = (req as ExpressRequest & { user?: { userId?: string } }).user;
-    const file = await this.fileService.findForStreamByFilename(filename);
+    const lookup = await this.fileService.findForStreamByFilename(filename);
+    const { file } = lookup;
     if (file.status !== Status.UPLOADED) {
       this.fileService.assertStreamAccess(file, user);
     }
-    if (file.type === 'video' || file.type === 'audio') {
+    /**
+     * Paywalled full streams use the same `File` row as the teaser; monetization
+     * must not block `/api/file/media/:trailerFilename` (see post playback metadata).
+     */
+    if (
+      (file.type === 'video' || file.type === 'audio') &&
+      !lookup.serveTrailer
+    ) {
       await this.streamMonetization.assertStreamAllowed(file.id, user?.userId);
     }
-    await this.pipeRangedFile(file.path, file.mimetype, req, res, headOnly);
+    const { absolutePath, mimetype } =
+      this.fileService.resolveMediaDiskPathAndMime(lookup);
+    await this.pipeRangedFile(absolutePath, mimetype, req, res, headOnly);
   }
 
   /**

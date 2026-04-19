@@ -4,7 +4,7 @@ import 'dotenv/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ExceptionsLoggerFilter } from './health/exceptionsLogger.filter';
-import { ui_base_url } from './utils';
+import { admin_ui_base_url, studio_ui_base_url, ui_base_url } from './utils';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
@@ -12,8 +12,11 @@ async function bootstrap() {
   // Avoid origin: '*' with credentials: true (invalid in browsers for credentialed requests).
   const corsOrigins = [
     ui_base_url,
+    admin_ui_base_url,
+    studio_ui_base_url,
     'http://localhost:4000',
-    'http://localhost:4000',
+    'http://localhost:4010',
+    'http://localhost:4020',
   ];
   app.enableCors({
     origin: [...new Set(corsOrigins)],

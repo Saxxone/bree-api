@@ -6,16 +6,17 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { FriendlyWsExceptionFilter } from '../health/ws-friendly-exception.filter';
+import { socket_io_cors_origins } from '../utils';
 import { Server } from 'socket.io';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { ChatService } from './chat.service';
 
 @WebSocketGateway({
   cors: {
-    namespace: 'chat',
-    origin: '*',
-    transports: ['websocket'],
+    origin: socket_io_cors_origins,
+    credentials: true,
   },
+  transports: ['websocket'],
 })
 @UseFilters(FriendlyWsExceptionFilter)
 export class ChatGateway {

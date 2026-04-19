@@ -15,7 +15,8 @@ import {
 } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
-import { resolve, isAbsolute } from 'path';
+import { dirname, join, resolve, isAbsolute } from 'path';
+import { randomBytes } from 'crypto';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { getMediaStorageDir, resolveFileBaseUrl } from './media-storage';
 import {
@@ -23,6 +24,35 @@ import {
   extractFilenameFromMediaUrl,
   probeVideoFile,
 } from './video-probe';
+import { generateVideoTrailer } from './video-trailer';
+
+export type FileMediaLookup = {
+  file: FileModel;
+  /** When true, serve `trailerPath` as MP4 instead of the main asset. */
+  serveTrailer: boolean;
+};
+
+function parseTrailerBackfillEnabled(): boolean {
+  const raw = process.env.TRAILER_BACKFILL_ENABLED?.trim().toLowerCase();
+  if (raw === '0' || raw === 'false' || raw === 'no') {
+    return false;
+  }
+  return true;
+}
+
+function parseTrailerBackfillBatch(): number {
+  const n = parseInt(process.env.TRAILER_BACKFILL_BATCH ?? '5', 10);
+  if (!Number.isFinite(n) || n < 1) {
+    return 5;
+  }
+  return Math.min(n, 50);
+}
+
+/** When true, backfill selects videos that already have a trailer and replaces them (CLI / ops only). */
+function parseTrailerBackfillOverride(): boolean {
+  const raw = process.env.TRAILER_BACKFILL_OVERRIDE?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
 
 @Injectable()
 export class FileService {
@@ -51,9 +81,89 @@ export class FileService {
     await this.deleteFilesAndRecords(pendingFiles);
   }
 
+  /** Hourly: generate trailers for older video rows that lack one. */
+  @Cron('0 0 * * * *')
+  async handleTrailerBackfillCron(): Promise<void> {
+    if (!parseTrailerBackfillEnabled()) {
+      return;
+    }
+    await this.runTrailerBackfillJob({ overrideExisting: false });
+  }
+
+  /**
+   * One batch of trailer generation (ffprobe-backed duration + ffmpeg clip).
+   * Same work as the scheduled job but ignores `TRAILER_BACKFILL_ENABLED` — use from CLI / ops.
+   *
+   * @param opts.overrideExisting When set, forces that behavior. When omitted, uses env `TRAILER_BACKFILL_OVERRIDE` (CLI jobs only — cron passes `false`).
+   */
+  async runTrailerBackfillJob(opts?: {
+    overrideExisting?: boolean;
+  }): Promise<{ candidateCount: number }> {
+    const batch = parseTrailerBackfillBatch();
+    const overrideExisting =
+      opts?.overrideExisting !== undefined
+        ? opts.overrideExisting
+        : parseTrailerBackfillOverride();
+    if (overrideExisting) {
+      this.logger.warn(
+        'TRAILER_BACKFILL_OVERRIDE is on: regenerating trailers even when one already exists (remove from .env when done).',
+      );
+    }
+    /**
+     * Raw query avoids `FileWhereInput` until Prisma client is regenerated after schema changes.
+     * Duration is intentionally not required here: `ensureVideoTrailerForFileId` re-probes and
+     * persists `videoDurationSeconds` on the fly when it is NULL, so filtering it out would leave
+     * never-probed legacy uploads permanently stuck without a trailer.
+     */
+    const candidates = overrideExisting
+      ? await this.prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+        SELECT id
+        FROM "File"
+        WHERE type = 'video'
+          AND "deletedAt" IS NULL
+          AND status IN ('PENDING'::"Status", 'UPLOADED'::"Status")
+        ORDER BY "createdAt" ASC
+        LIMIT ${batch}
+      `,
+        )
+      : await this.prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+        SELECT id
+        FROM "File"
+        WHERE type = 'video'
+          AND "deletedAt" IS NULL
+          AND status IN ('PENDING'::"Status", 'UPLOADED'::"Status")
+          AND "trailerFilename" IS NULL
+        ORDER BY "createdAt" ASC
+        LIMIT ${batch}
+      `,
+        );
+    for (const row of candidates) {
+      await this.ensureVideoTrailerForFileId(row.id, {
+        overrideExisting: overrideExisting,
+      }).catch((err) => {
+        this.logger.warn(`Trailer backfill failed for file ${row.id}: ${err}`);
+      });
+    }
+    if (candidates.length > 0) {
+      this.logger.log(
+        `Trailer backfill processed up to ${candidates.length} file(s)`,
+      );
+    }
+    return { candidateCount: candidates.length };
+  }
+
   private async deleteFilesAndRecords(files: Array<FileModel>) {
     for (const file of files) {
       try {
+        if (file.trailerPath) {
+          try {
+            await fs.unlink(this.resolveDiskPathForProbe(file.trailerPath));
+          } catch {
+            /* ignore missing trailer on disk */
+          }
+        }
         await fs.unlink(file.path);
         console.log(`File deleted from storage: ${file.path}`);
 
@@ -93,14 +203,23 @@ export class FileService {
         } as Prisma.FileCreateInput,
       });
       if (savedFile.type === 'video') {
-        await this.probeAndPersistVideoMetadata(
-          savedFile.id,
-          savedFile.path,
-        ).catch((err) => {
-          this.logger.warn(
-            `Video probe failed for file ${savedFile.id}: ${err}`,
-          );
-        });
+        void this.probeAndPersistVideoMetadata(savedFile.id, savedFile.path)
+          .then((meta) => {
+            if (meta) {
+              void this.ensureVideoTrailerForFileId(savedFile.id).catch(
+                (err) => {
+                  this.logger.warn(
+                    `Video trailer failed for file ${savedFile.id}: ${err}`,
+                  );
+                },
+              );
+            }
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `Video probe failed for file ${savedFile.id}: ${err}`,
+            );
+          });
       }
       savedFiles.push(savedFile.id);
     }
@@ -142,13 +261,23 @@ export class FileService {
         }
 
         if (file.type === 'video') {
-          await this.probeAndPersistVideoMetadata(file.id, file.path).catch(
-            (err) => {
-              this.logger.warn(
-                `Video probe failed after upload for file ${file.id}: ${err}`,
-              );
-            },
-          );
+          try {
+            const meta = await this.probeAndPersistVideoMetadata(
+              file.id,
+              file.path,
+            );
+            if (meta) {
+              void this.ensureVideoTrailerForFileId(file.id).catch((err) => {
+                this.logger.warn(
+                  `Video trailer failed after upload for file ${file.id}: ${err}`,
+                );
+              });
+            }
+          } catch (err) {
+            this.logger.warn(
+              `Video probe failed after upload for file ${file.id}: ${err}`,
+            );
+          }
         }
 
         return file.status;
@@ -194,6 +323,81 @@ export class FileService {
       },
     });
     return result;
+  }
+
+  /**
+   * Encode first ~10s (or full length if shorter) to MP4 and persist trailer fields.
+   * No-op if not a video, already has a trailer (unless {@link opts.overrideExisting}), or source is missing / not probeable.
+   */
+  private async ensureVideoTrailerForFileId(
+    fileId: string,
+    opts?: { overrideExisting?: boolean },
+  ): Promise<void> {
+    const override = opts?.overrideExisting === true;
+    const file = await this.prisma.file.findUnique({ where: { id: fileId } });
+    if (
+      !file ||
+      file.type !== 'video' ||
+      file.deletedAt != null ||
+      file.status === Status.DELETED ||
+      (!override && file.trailerFilename)
+    ) {
+      return;
+    }
+
+    const sourceDisk = this.resolveDiskPathForProbe(file.path);
+    const previousTrailerPath = override ? file.trailerPath : null;
+
+    try {
+      await fs.access(sourceDisk);
+    } catch {
+      this.logger.warn(`Trailer skipped, source missing for ${fileId}`);
+      return;
+    }
+
+    let durationSeconds = file.videoDurationSeconds;
+    if (durationSeconds == null || durationSeconds <= 0) {
+      const probed = await this.probeAndPersistVideoMetadata(fileId, file.path);
+      durationSeconds = probed?.durationSeconds ?? null;
+    }
+    if (durationSeconds == null || durationSeconds <= 0) {
+      this.logger.warn(`Trailer skipped, no duration for ${fileId}`);
+      return;
+    }
+
+    const stem =
+      (file.filename && file.filename.replace(/\.[^/.]+$/, '')) ||
+      `video-${fileId.slice(0, 8)}`;
+    const trailerFilename = `${stem}-trailer-${randomBytes(8).toString('hex')}.mp4`;
+    const trailerPath = join(dirname(sourceDisk), trailerFilename);
+    const trailerUrl = `${resolveFileBaseUrl()}${trailerFilename}`;
+
+    await generateVideoTrailer(sourceDisk, trailerPath, {
+      durationSeconds,
+      maxSeconds: 10,
+    });
+
+    const updated = await this.prisma.file.updateMany({
+      where: override ? { id: fileId } : { id: fileId, trailerFilename: null },
+      data: { trailerFilename, trailerPath, trailerUrl },
+    });
+    if (updated.count === 0) {
+      await fs.unlink(trailerPath).catch(() => {
+        /* ignore */
+      });
+      return;
+    }
+    if (
+      override &&
+      previousTrailerPath &&
+      previousTrailerPath !== trailerPath
+    ) {
+      try {
+        await fs.unlink(this.resolveDiskPathForProbe(previousTrailerPath));
+      } catch {
+        /* ignore missing previous trailer */
+      }
+    }
   }
 
   private static streamQualityRank(q: StreamQuality): number {
@@ -320,7 +524,7 @@ export class FileService {
     return file;
   }
 
-  async findForStreamByFilename(rawName: string): Promise<FileModel> {
+  async findForStreamByFilename(rawName: string): Promise<FileMediaLookup> {
     if (
       !rawName ||
       rawName.includes('/') ||
@@ -332,17 +536,47 @@ export class FileService {
     }
     const candidates = FileService.filenameLookupCandidates(rawName);
     for (const name of candidates) {
-      const file = await this.prisma.file.findFirst({
+      const main = await this.prisma.file.findFirst({
         where: {
           filename: name,
           status: { not: Status.DELETED },
         },
       });
-      if (file) {
-        return file;
+      if (main) {
+        return { file: main, serveTrailer: false };
+      }
+      const trailerHit = await this.prisma.file.findFirst({
+        where: {
+          trailerFilename: name,
+          status: { not: Status.DELETED },
+        },
+      });
+      if (trailerHit) {
+        return { file: trailerHit, serveTrailer: true };
       }
     }
     throw new NotFoundException('File not found');
+  }
+
+  /** Absolute path and Content-Type for GET/HEAD /file/media/:filename (main or trailer). */
+  resolveMediaDiskPathAndMime(lookup: FileMediaLookup): {
+    absolutePath: string;
+    mimetype: string;
+  } {
+    if (lookup.serveTrailer) {
+      const { file } = lookup;
+      if (!file.trailerPath || !file.trailerFilename) {
+        throw new NotFoundException('Trailer not found');
+      }
+      return {
+        absolutePath: this.resolveDiskPathForProbe(file.trailerPath),
+        mimetype: 'video/mp4',
+      };
+    }
+    return {
+      absolutePath: this.resolveDiskPathForProbe(lookup.file.path),
+      mimetype: lookup.file.mimetype,
+    };
   }
 
   /**
@@ -381,6 +615,11 @@ export class FileService {
         filename: string;
         url: string;
         status: Status;
+        videoWidth: number | null;
+        videoHeight: number | null;
+        videoDurationSeconds: number | null;
+        trailerFilename: string | null;
+        trailerUrl: string | null;
       }
     >
   > {
@@ -406,6 +645,8 @@ export class FileService {
         videoWidth: true,
         videoHeight: true,
         videoDurationSeconds: true,
+        trailerFilename: true,
+        trailerUrl: true,
       },
     });
     type Row = {
@@ -420,6 +661,8 @@ export class FileService {
       videoWidth: number | null;
       videoHeight: number | null;
       videoDurationSeconds: number | null;
+      trailerFilename: string | null;
+      trailerUrl: string | null;
     };
     const map = new Map<string, Row>();
     for (const f of files) {
@@ -435,6 +678,8 @@ export class FileService {
         videoWidth: f.videoWidth,
         videoHeight: f.videoHeight,
         videoDurationSeconds: f.videoDurationSeconds,
+        trailerFilename: f.trailerFilename,
+        trailerUrl: f.trailerUrl,
       };
       map.set(f.url, row);
       map.set(f.path, row);

@@ -14,27 +14,53 @@ export class NotificationService {
 
   async create(createNotificationDto: CreateNotificationDto) {
     try {
+      const {
+        user,
+        author,
+        type,
+        description,
+        postId,
+        commentId,
+        mentionedUserId,
+      } = createNotificationDto;
+
       const notification = await this.prisma.notification.create({
         data: {
-          ...createNotificationDto,
-          user: {
-            connect: { id: createNotificationDto.user.id },
-          },
+          type,
+          description,
+          userId: user.id,
+          ...(postId != null && postId !== '' ? { postId } : {}),
+          ...(commentId != null && commentId !== '' ? { commentId } : {}),
+          ...(mentionedUserId != null && mentionedUserId !== ''
+            ? { mentionedUserId }
+            : {}),
         },
       });
 
+      const ssePayload = {
+        id: notification.id,
+        date: notification.createdAt,
+        description: notification.description,
+        type: notification.type,
+        author,
+        user,
+        postId: notification.postId ?? undefined,
+        commentId: notification.commentId ?? undefined,
+        read: notification.read,
+      };
+
       switch (createNotificationDto.type) {
         case NotificationType.POST_CREATED:
-          this.eventEmitter.emit('post.created', createNotificationDto);
+          this.eventEmitter.emit('post.created', ssePayload);
           break;
         case NotificationType.POST_LIKED:
-          this.eventEmitter.emit('post.liked', createNotificationDto);
+          this.eventEmitter.emit('post.liked', ssePayload);
           break;
         case NotificationType.COMMENT_ADDED:
-          this.eventEmitter.emit('post.created', createNotificationDto);
+          this.eventEmitter.emit('comment.added', ssePayload);
           break;
         case NotificationType.USER_MENTIONED:
-          this.eventEmitter.emit('post.created', createNotificationDto);
+          this.eventEmitter.emit('post.created', ssePayload);
           break;
         default:
           break;
@@ -46,9 +72,10 @@ export class NotificationService {
     }
   }
 
-  findAll(skip: number, take: number) {
+  findAll(skip: number, take: number, userId: string) {
     try {
       return this.prisma.notification.findMany({
+        where: { userId },
         skip,
         take,
         orderBy: {
@@ -72,8 +99,26 @@ export class NotificationService {
     }
   }
 
-  update(id: string, updateNotificationDto: UpdateNotificationDto) {
-    return `This action updates a #${id} notification, ${updateNotificationDto}`;
+  async update(id: string, updateNotificationDto: UpdateNotificationDto) {
+    try {
+      return await this.prisma.notification.update({
+        where: { id },
+        data: {
+          ...(updateNotificationDto.read !== undefined && {
+            read: updateNotificationDto.read,
+          }),
+        },
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  markAllRead(userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
   }
 
   remove(id: string) {

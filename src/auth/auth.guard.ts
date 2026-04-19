@@ -11,12 +11,14 @@ import { Reflector } from '@nestjs/core/services/reflector.service';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AuthService } from 'src/auth/auth.service';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 export interface JwtPayload {
   sub: string;
   username: string;
   userId: string;
+  role?: UserRole;
 }
 
 export const IS_PUBLIC_KEY = 'isPublic';

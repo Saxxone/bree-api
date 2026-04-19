@@ -9,16 +9,16 @@ import {
 import { FriendlyWsExceptionFilter } from '../health/ws-friendly-exception.filter';
 import { RoomService } from './room.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { ui_base_url } from '../utils';
+import { socket_io_cors_origins } from '../utils';
 import { JoinRoomDto } from '../room/dto/update-room.dto';
 import { Socket, Server } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    namespace: 'room',
-    origin: ui_base_url,
-    transports: ['websocket'],
+    origin: socket_io_cors_origins,
+    credentials: true,
   },
+  transports: ['websocket'],
 })
 @UseFilters(FriendlyWsExceptionFilter)
 export class RoomGateway {

@@ -18,6 +18,11 @@ export type ClientErrorCode =
   | 'PRISMA_RELATION_VIOLATION'
   | 'PRISMA_VALUE_TOO_LONG'
   | 'PRISMA_REQUIRED_FIELD'
+  | 'PRISMA_TRANSACTION_CONFLICT'
+  | 'PRISMA_TIMEOUT'
+  | 'PRISMA_MISSING_VALUE'
+  | 'PRISMA_RELATED_NOT_FOUND'
+  | 'PRISMA_RAW_QUERY_FAILED'
   | 'PRISMA_UNKNOWN'
   | 'INSUFFICIENT_COINS'
   | 'WALLET_BUSY';
@@ -96,11 +101,20 @@ export function resolveClientException(
   }
 
   if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+    const clientCode = prismaCodeToClientCode(exception.code);
+    const metaSummary =
+      exception.meta && Object.keys(exception.meta).length > 0
+        ? ` ${JSON.stringify(exception.meta)}`
+        : '';
     return {
       status: httpStatusForPrisma(exception.code),
       clientMessage: friendlyPrismaMessage(exception),
-      logDetail: `${exception.code}: ${exception.message}\n${exception.stack ?? ''}`,
-      code: prismaCodeToClientCode(exception.code),
+      logDetail: `${exception.code}: ${exception.message}${metaSummary}\n${exception.stack ?? ''}`,
+      devHint:
+        isProd || clientCode !== 'PRISMA_UNKNOWN'
+          ? undefined
+          : `${exception.code}: ${exception.message}${metaSummary}`,
+      code: clientCode,
     };
   }
 
@@ -151,6 +165,16 @@ function prismaCodeToClientCode(code: string): ClientErrorCode {
       return 'PRISMA_VALUE_TOO_LONG';
     case 'P2011':
       return 'PRISMA_REQUIRED_FIELD';
+    case 'P2034':
+      return 'PRISMA_TRANSACTION_CONFLICT';
+    case 'P2024':
+      return 'PRISMA_TIMEOUT';
+    case 'P2012':
+      return 'PRISMA_MISSING_VALUE';
+    case 'P2015':
+      return 'PRISMA_RELATED_NOT_FOUND';
+    case 'P2010':
+      return 'PRISMA_RAW_QUERY_FAILED';
     default:
       return 'PRISMA_UNKNOWN';
   }
@@ -237,12 +261,17 @@ function coerceBodyToMessage(body: string | object): string {
 function httpStatusForPrisma(code: string): number {
   switch (code) {
     case 'P2002':
+    case 'P2034':
       return HttpStatus.CONFLICT;
     case 'P2025':
+    case 'P2015':
       return HttpStatus.NOT_FOUND;
     case 'P2003':
     case 'P2014':
+    case 'P2012':
       return HttpStatus.BAD_REQUEST;
+    case 'P2024':
+      return HttpStatus.SERVICE_UNAVAILABLE;
     default:
       return HttpStatus.INTERNAL_SERVER_ERROR;
   }
@@ -264,6 +293,16 @@ function friendlyPrismaMessage(
       return 'One of the values provided is too long.';
     case 'P2011':
       return 'A required field was missing.';
+    case 'P2034':
+      return 'That action conflicted with another update. Please try again.';
+    case 'P2024':
+      return 'The database is busy right now. Please try again in a moment.';
+    case 'P2012':
+      return 'Required information was missing from the request.';
+    case 'P2015':
+      return 'A related record could not be found.';
+    case 'P2010':
+      return 'We could not complete that action. Please try again.';
     default:
       return 'We could not complete that action. Please try again.';
   }

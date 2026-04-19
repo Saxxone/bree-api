@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -15,9 +17,11 @@ import { SignJWT, decodeJwt, importPKCS8 } from 'jose';
 import { google } from 'googleapis';
 import Stripe from 'stripe';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreatorStripeConnectService } from 'src/creator/creator-stripe-connect.service';
 import { CoinWalletService } from './coin-wallet.service';
 
 type StripeClient = InstanceType<typeof Stripe>;
+type StripeWebhookEvent = ReturnType<StripeClient['webhooks']['constructEvent']>;
 
 @Injectable()
 export class CoinPurchaseService {
@@ -28,6 +32,8 @@ export class CoinPurchaseService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly wallet: CoinWalletService,
+    @Inject(forwardRef(() => CreatorStripeConnectService))
+    private readonly creatorStripeConnect: CreatorStripeConnectService,
   ) {}
 
   private getStripe(): StripeClient {
@@ -80,11 +86,17 @@ export class CoinPurchaseService {
       this.config.get<string>('STRIPE_CHECKOUT_CANCEL_URL') ??
       `${this.config.get<string>('UI_BASE_URL') ?? 'http://localhost:4000'}/coins/cancel`;
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
     const session = await this.getStripe().checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: pkg.stripePriceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
+      ...(user?.email ? { customer_email: user.email } : {}),
       metadata: {
         userId,
         packageId: pkg.id,
@@ -107,32 +119,62 @@ export class CoinPurchaseService {
       throw new BadRequestException('Missing stripe-signature header');
     }
 
-    type StripeWebhookEvent = {
-      id: string;
-      type: string;
-      data: { object: { id?: string; metadata?: Record<string, string> } };
-    };
-
     let event: StripeWebhookEvent;
     try {
       event = this.getStripe().webhooks.constructEvent(
         rawBody,
         signature,
         secret,
-      ) as StripeWebhookEvent;
+      );
     } catch (err) {
       this.logger.warn(`Stripe webhook signature failed: ${err}`);
       throw new BadRequestException('Invalid Stripe signature');
     }
 
-    if (
-      event.type !== 'checkout.session.completed' &&
-      event.type !== 'checkout.session.async_payment_succeeded'
-    ) {
-      return { received: true, ignored: true };
-    }
+    const kind = event.type as string;
 
-    const session = event.data.object;
+    switch (kind) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
+        return this.handleCheckoutSessionCompleted(event);
+      case 'account.updated': {
+        const account = event.data.object as {
+          id: string;
+          charges_enabled?: boolean | null;
+          payouts_enabled?: boolean | null;
+        };
+        await this.creatorStripeConnect.syncAccountFromStripe(account);
+        return { received: true, connect: true };
+      }
+      default:
+        if (kind.startsWith('transfer.')) {
+          const transfer = event.data.object as {
+            id: string;
+            amount: number;
+            destination?: string | { id: string } | null;
+          };
+          const destination =
+            typeof transfer.destination === 'string'
+              ? transfer.destination
+              : transfer.destination && typeof transfer.destination === 'object'
+                ? transfer.destination.id
+                : undefined;
+          this.creatorStripeConnect.logTransferEvent(kind, {
+            id: transfer.id,
+            amount: transfer.amount,
+            destination,
+          });
+          return { received: true, transfer: kind };
+        }
+        return { received: true, ignored: true };
+    }
+  }
+
+  private async handleCheckoutSessionCompleted(event: StripeWebhookEvent) {
+    const session = event.data.object as {
+      id?: string;
+      metadata?: { userId?: string; packageId?: string };
+    };
     const userId = session.metadata?.userId;
     const packageId = session.metadata?.packageId;
     if (!userId || !packageId) {

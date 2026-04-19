@@ -9,5 +9,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
   imports: [CoinsModule],
   controllers: [FileController],
   providers: [FileService, UserService, PrismaService],
+  exports: [FileService],
 })
 export class FileModule {}

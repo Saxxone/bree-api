@@ -4,6 +4,7 @@ import {
   IsString,
   MinLength,
   IsNotEmpty,
+  IsOptional,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -28,10 +29,12 @@ export class CreateUserDto {
   bio?: string;
 
   @Allow()
+  @IsOptional()
   @IsString()
   img?: string;
 
   @Allow()
+  @IsOptional()
   @IsString()
   banner?: string;
 }

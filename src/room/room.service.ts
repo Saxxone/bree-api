@@ -32,7 +32,13 @@ export class RoomService {
     return room;
   }
 
-  findAllWithParticipant(email: string) {
+  findAllWithParticipant(
+    email: string,
+    skip: number = 0,
+    take: number = 50,
+  ) {
+    const s = Math.max(0, skip);
+    const t = Math.min(Math.max(1, take), 100);
     return this.prisma.room.findMany({
       where: {
         participants: {
@@ -41,6 +47,9 @@ export class RoomService {
           },
         },
       },
+      skip: s,
+      take: t,
+      orderBy: { updatedAt: 'desc' },
       include: {
         participants: {
           select: {
@@ -64,11 +73,30 @@ export class RoomService {
     });
   }
 
-  findChatsInRoom(roomId: string) {
+  findChatsInRoom(
+    roomId: string,
+    opts?: { skip?: number; take?: number; cursor?: string },
+  ) {
+    const take = Math.min(Math.max(Number(opts?.take) || 10, 1), 100);
+    const skipRaw = Math.max(Number(opts?.skip) || 0, 0);
+    const cursor = opts?.cursor?.trim();
+    if (cursor) {
+      return this.prisma.chat.findMany({
+        where: { roomId },
+        take,
+        skip: 1,
+        cursor: { id: cursor },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          userEncryptedMessages: true,
+        },
+      });
+    }
     return this.prisma.chat.findMany({
-      where: {
-        roomId,
-      },
+      where: { roomId },
+      orderBy: { createdAt: 'desc' },
+      skip: skipRaw,
+      take,
       include: {
         userEncryptedMessages: true,
       },

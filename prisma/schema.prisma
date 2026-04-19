@@ -5,12 +5,16 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  SUPERADMIN
 }
 
 model User {
@@ -18,11 +22,15 @@ model User {
   email                     String                     @unique
   username                  String                     @unique
   name                      String
+  role                      UserRole                   @default(USER)
   bio                       String?                    @db.VarChar(140)
   verified                  Boolean                    @default(false)
   banner                    String?
   img                       String
   password                  String?
+  stripeConnectAccountId    String?                    @unique
+  stripeConnectChargesEnabled Boolean                  @default(false)
+  stripeConnectPayoutsEnabled Boolean                  @default(false)
   posts                     Post[]
   files                     File[]
   likedPosts                Post[]                     @relation("likedPosts")
@@ -118,6 +126,9 @@ model File {
   videoWidth            Int?
   videoHeight           Int?
   videoDurationSeconds  Int?
+  trailerFilename       String?
+  trailerPath           String?
+  trailerUrl            String?
 }
 
 model Chat {
@@ -240,6 +251,8 @@ enum CoinTxnType {
   SPEND_UNLOCK
   CREATOR_EARN
   ADJUSTMENT
+  /// Negative amountMinor: coins redeemed for cash via Stripe Connect transfer.
+  PAYOUT
 }
 
 enum CoinPurchaseProvider {

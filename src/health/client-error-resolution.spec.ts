@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { resolveClientException } from './client-error-resolution';
 
 describe('resolveClientException', () => {
@@ -25,5 +26,28 @@ describe('resolveClientException', () => {
     const r = resolveClientException(new Error('DB blew up'), true);
     expect(r.clientMessage).not.toContain('DB blew up');
     expect(r.code).toBe('INTERNAL_ERROR');
+  });
+
+  it('maps Prisma transaction write conflict P2034', () => {
+    const ex = new Prisma.PrismaClientKnownRequestError('conflict', {
+      code: 'P2034',
+      clientVersion: '0.0.0',
+    });
+    const r = resolveClientException(ex, true);
+    expect(r.code).toBe('PRISMA_TRANSACTION_CONFLICT');
+    expect(r.status).toBe(409);
+    expect(r.clientMessage).toContain('conflicted');
+  });
+
+  it('includes devHint for unmapped Prisma codes in development', () => {
+    const ex = new Prisma.PrismaClientKnownRequestError('weird', {
+      code: 'P2099',
+      clientVersion: '0.0.0',
+      meta: { foo: 'bar' },
+    });
+    const r = resolveClientException(ex, false);
+    expect(r.code).toBe('PRISMA_UNKNOWN');
+    expect(r.devHint).toContain('P2099');
+    expect(r.devHint).toContain('foo');
   });
 });

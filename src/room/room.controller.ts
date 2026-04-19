@@ -17,13 +17,34 @@ export class RoomController {
   constructor(private readonly roomService: RoomService) {}
 
   @Get('/all')
-  findAll(@Request() req: any) {
-    return this.roomService.findAllWithParticipant(req.user.sub);
+  findAll(
+    @Request() req: any,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    const s = Number.parseInt(String(skip ?? '0'), 10);
+    const t = Number.parseInt(String(take ?? '50'), 10);
+    return this.roomService.findAllWithParticipant(
+      req.user.sub,
+      Number.isFinite(s) ? Math.max(0, s) : 0,
+      Number.isFinite(t) ? Math.min(Math.max(1, t), 100) : 50,
+    );
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.roomService.findOne(id);
+  @Get('/chats/:id')
+  findChatsInRoom(
+    @Param('id') id: string,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const s = Number.parseInt(String(skip ?? '0'), 10);
+    const t = Number.parseInt(String(take ?? '10'), 10);
+    return this.roomService.findChatsInRoom(id, {
+      skip: Number.isFinite(s) ? Math.max(0, s) : 0,
+      take: Number.isFinite(t) ? Math.min(Math.max(1, t), 100) : 10,
+      cursor: cursor?.trim() || undefined,
+    });
   }
 
   @Post('/find-create')
@@ -34,14 +55,14 @@ export class RoomController {
     return this.roomService.findRoomByParticipantsOrCreate(user1Id, user2Id);
   }
 
-  @Get('/chats/:id')
-  findChatsInRoom(@Param('id') id: string) {
-    return this.roomService.findChatsInRoom(id);
-  }
-
   @Patch('/update/:id')
   update(@Param('id') id: string, @Body() updateRoomDto: UpdateRoomDto) {
     return this.roomService.update(id, updateRoomDto);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.roomService.findOne(id);
   }
 
   @Delete(':id')

@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CreatorModule } from 'src/creator/creator.module';
 import { CoinPurchaseService } from './coin-purchase.service';
 import { CoinPricingService } from './coin-pricing.service';
 import { CoinUnlockService } from './coin-unlock.service';
@@ -9,7 +10,7 @@ import { CoinsStripeWebhookController } from './coins-webhook.controller';
 import { StreamMonetizationService } from './stream-monetization.service';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, forwardRef(() => CreatorModule)],
   controllers: [CoinsController, CoinsStripeWebhookController],
   providers: [
     CoinWalletService,

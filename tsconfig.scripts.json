@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "express", "multer"]
+  },
+  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+}

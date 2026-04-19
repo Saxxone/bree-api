@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
@@ -21,13 +21,15 @@ async function main() {
   const passwordPlain = process.env.SEED_PASSWORD ?? 'password';
   const hash = await bcrypt.hash(passwordPlain, 10);
 
+  const seedEmail = process.env.SEED_EMAIL ?? 'admin@example.com';
+
   const admin = await prisma.user.upsert({
-    where: { email: process.env.SEED_EMAIL ?? 'admin@example.com' },
+    where: { email: seedEmail },
     update: {
       img: defaultImg,
     },
     create: {
-      email: process.env.SEED_EMAIL ?? 'admin@example.com',
+      email: seedEmail,
       username: process.env.SEED_USERNAME ?? 'admin',
       name: 'Seed Admin',
       img: defaultImg,
@@ -47,6 +49,12 @@ async function main() {
       password: hash,
       verified: false,
     },
+  });
+
+  const superAdminEmail = process.env.SUPERADMIN_EMAIL ?? seedEmail;
+  await prisma.user.updateMany({
+    where: { email: superAdminEmail },
+    data: { role: UserRole.SUPERADMIN },
   });
 
   console.log('Seeded users:', { admin: admin.email, demo: demo.email });

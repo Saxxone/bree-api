@@ -26,6 +26,7 @@
     "prisma:format": "prisma format",
     "prisma:reset": "prisma migrate reset --force",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "job:trailer-backfill": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/run-trailer-backfill.ts",
     "prisma:drop": "prisma migrate reset --force && prisma db push --force",
     "prepare": "husky",
     "doc": "npx compodoc -p tsconfig.json -s -n \"Afovid Backend documentation\"",

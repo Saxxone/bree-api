@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
   NotAcceptableException,
@@ -7,7 +8,7 @@ import { UserService } from '../user/user.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { GoogleAuthUser, AuthUser } from './dto/sign-in.dto';
-import { User } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import * as https from 'https';
 import { join } from 'path';
@@ -51,12 +52,47 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    if (user.password) delete user.password;
+    const fullUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    const tokens = await this.generateTokens(fullUser);
+    if (fullUser.password) {
+      delete (fullUser as { password?: string }).password;
+    }
+    return { ...fullUser, ...tokens };
+  }
 
-    return {
-      ...user,
-      ...(await this.generateTokens(user)),
-    };
+  async signInSuperAdmin(
+    usernameOrEmail: string,
+    pass: string,
+  ): Promise<Partial<AuthUser> & { access_token: string; refresh_token: string }> {
+    const row = await this.userService.findUser(usernameOrEmail, {
+      withPassword: true,
+    });
+
+    if (!row.password) {
+      throw new ForbiddenException(
+        'Superadmin login requires a password-based account',
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(pass, row.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException();
+    }
+
+    if (row.role !== UserRole.SUPERADMIN) {
+      throw new ForbiddenException('Superadmin access required');
+    }
+
+    const fullUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: row.id },
+    });
+    const tokens = await this.generateTokens(fullUser);
+    if (fullUser.password) {
+      delete (fullUser as { password?: string }).password;
+    }
+    return { ...fullUser, ...tokens };
   }
 
   async signOut(usernameOrEmail: string, pass: string): Promise<any> {
@@ -100,12 +136,14 @@ export class AuthService {
     if (user.img === default_img) {
       return await this.updateUserProfile(user, payload, default_img);
     } else {
-      if (user.password) delete user.password;
-
-      return {
-        ...user,
-        ...(await this.generateTokens(user)),
-      };
+      const fullUser = await this.prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      const tokens = await this.generateTokens(fullUser);
+      if (fullUser.password) {
+        delete (fullUser as { password?: string }).password;
+      }
+      return { ...fullUser, ...tokens };
     }
   }
 
@@ -178,12 +216,14 @@ export class AuthService {
       } catch (error) {
         console.error('Error downloading or saving image:', error);
 
-        if (user.password) delete user.password;
-
-        return {
-          ...user,
-          ...(await this.generateTokens(user)),
-        };
+        const fullUser = await this.prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+        });
+        const tokens = await this.generateTokens(fullUser);
+        if (fullUser.password) {
+          delete (fullUser as { password?: string }).password;
+        }
+        return { ...fullUser, ...tokens };
       }
     }
   }
@@ -203,11 +243,10 @@ export class AuthService {
   }
 
   async generateAccessToken(payload: JwtPayload): Promise<string> {
-    const newAccessToken = await this.signToken({
-      id: payload.userId,
-      email: payload.sub,
-      username: payload.username,
-    } as User);
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: payload.userId },
+    });
+    const newAccessToken = await this.signToken(user);
 
     await this.saveToken(payload.userId, newAccessToken, false);
     return newAccessToken;
@@ -254,7 +293,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid token');
       }
 
-      request['user'] = payload;
+      request['user'] = payload as JwtPayload;
     } catch {
       if (!is_public) {
         try {
@@ -276,11 +315,10 @@ export class AuthService {
             throw new UnauthorizedException('Invalid refresh token.');
           }
 
-          const new_access_token = await this.signToken({
-            id: refresh_token_payload.userId,
-            email: refresh_token_payload.sub,
-            username: refresh_token_payload.username,
-          } as User);
+          const dbUser = await this.prisma.user.findUniqueOrThrow({
+            where: { id: refresh_token_payload.userId },
+          });
+          const new_access_token = await this.signToken(dbUser);
 
           const access_token_expires_at = new Date(
             Date.now() + 200 * 60 * 1000,
@@ -304,7 +342,12 @@ export class AuthService {
             },
           });
 
-          request['user'] = refresh_token_payload;
+          request['user'] = {
+            sub: dbUser.email,
+            username: dbUser.username,
+            userId: dbUser.id,
+            role: dbUser.role,
+          };
           request.headers.authorization = `Bearer ${new_access_token}`;
         } catch (inner) {
           if (inner instanceof UnauthorizedException) {
@@ -337,6 +380,7 @@ export class AuthService {
       sub: user.email,
       username: user.username,
       userId: user.id,
+      role: user.role,
     };
     return this.jwtService.signAsync(payload, {
       secret: jwtConstants.secret,
@@ -349,6 +393,7 @@ export class AuthService {
       sub: user.email,
       username: user.username,
       userId: user.id,
+      role: user.role,
     };
     return this.jwtService.signAsync(payload, {
       secret: jwtConstants.refreshSecret,

@@ -31,6 +31,7 @@ export class UserService {
           publicKey: true,
           bio: true,
           verified: true,
+          role: true,
         },
       }),
 

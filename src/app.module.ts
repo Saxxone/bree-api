@@ -22,6 +22,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
 import { CoinsModule } from './coins/coins.module';
+import { AdminModule } from './admin/admin.module';
+import { CreatorModule } from './creator/creator.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { CoinsModule } from './coins/coins.module';
     ChatModule,
     RoomModule,
     CoinsModule,
+    AdminModule,
+    CreatorModule,
   ],
   controllers: [AppController],
   providers: [

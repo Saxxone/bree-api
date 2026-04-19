@@ -16,6 +16,18 @@ export class CreateNotificationDto {
   description: string;
 
   @IsOptional()
+  @IsString()
+  postId?: string;
+
+  @IsOptional()
+  @IsString()
+  commentId?: string;
+
+  @IsOptional()
+  @IsString()
+  mentionedUserId?: string;
+
+  @IsOptional()
   trigger?: any;
 }
 

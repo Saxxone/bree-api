@@ -12,6 +12,7 @@ import {
   PostType,
   Prisma,
   Status as FileStatus,
+  User,
 } from '@prisma/client';
 import { CoinPricingService } from 'src/coins/coin-pricing.service';
 import { FileService } from 'src/file/file.service';
@@ -22,7 +23,6 @@ import {
 import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
-import { UserService } from 'src/user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
@@ -44,8 +44,25 @@ export type PostMediaMetadataEntry = {
   requiresAuth: boolean;
   /** video / audio only: direct URL vs range streaming */
   playbackMode?: 'direct' | 'stream';
+  /**
+   * Video/audio only: post-level coin paywall toggle (mirrors `Post.monetizationEnabled`).
+   * When false, `pricedCostMinor` / `paywalled` are omitted for that asset.
+   */
+  monetizationEnabled?: boolean;
+  /**
+   * Video/audio only: fixed unlock price for the post in minor coin units when `monetizationEnabled`.
+   * Same value on each streamed asset of a monetized post.
+   */
+  pricedCostMinor?: number | null;
   /** Coin paywall: no playback URL returned until unlocked */
   paywalled?: boolean;
+  /** Stored trailer URL when generated; may be non-http when FILE_BASE_URL is unset. */
+  trailerUrl?: string | null;
+  /**
+   * Short preview clip (`/api/file/media/:trailerFilename`) when present.
+   * Still returned when the full asset is paywalled so clients can autoplay a teaser.
+   */
+  trailerPlayback?: string | null;
 };
 
 type FileRowForPlayback = {
@@ -57,6 +74,8 @@ type FileRowForPlayback = {
   filename: string;
   url: string;
   status: FileStatus;
+  trailerFilename: string | null;
+  trailerUrl: string | null;
 };
 
 function parseVideoDirectPlaybackMaxBytes(): number {
@@ -93,6 +112,7 @@ export class PostService {
         id: true,
         name: true,
         img: true,
+        username: true,
       },
     },
     longPost: {
@@ -106,7 +126,6 @@ export class PostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fileService: FileService,
-    private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly streamMonetization: StreamMonetizationService,
     private readonly coinPricing: CoinPricingService,
@@ -155,8 +174,8 @@ export class PostService {
     mediaTypes: string[],
     fileByUrl: Map<string, FileRowForPlayback>,
     lockedFileIds: Set<string>,
-    /** When true, video/audio must carry auth on /file/media/* so monetization can verify unlock (direct URLs otherwise omit ?token=). */
-    postMonetizationEnabled: boolean,
+    /** Post-level monetization: affects auth on playback URLs and per-video metadata backfill. */
+    postMonetization: { enabled: boolean; pricedCostMinor: number | null },
   ): {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
@@ -195,6 +214,52 @@ export class PostService {
         !PostService.NO_STREAM_FALLBACK_FROM_POST_TYPES.has(file.type);
       const isStreamedMedia = streamedFromFile || streamedFromPost;
 
+      const trailerExtras = (): Pick<
+        PostMediaMetadataEntry,
+        'trailerUrl' | 'trailerPlayback'
+      > => {
+        if (file.type !== 'video') {
+          return {};
+        }
+        if (file.trailerFilename) {
+          return {
+            trailerUrl: file.trailerUrl ?? null,
+            /** Teaser clip URL; included even when the full asset is paywalled. */
+            trailerPlayback: mediaFilePublicUrl(file.trailerFilename),
+          };
+        }
+        /** Legacy rows: HTTP `trailerUrl` without separate `trailerFilename`. */
+        if (file.trailerUrl && isHttpAccessibleUrl(file.trailerUrl)) {
+          return {
+            trailerUrl: file.trailerUrl,
+            trailerPlayback: file.trailerUrl,
+          };
+        }
+        return {
+          trailerUrl: file.trailerUrl ?? null,
+        };
+      };
+
+      const streamMonetizationFields = (): Partial<
+        Pick<
+          PostMediaMetadataEntry,
+          'monetizationEnabled' | 'pricedCostMinor' | 'paywalled'
+        >
+      > => {
+        if (!isStreamedMedia) {
+          return {};
+        }
+        if (!postMonetization.enabled) {
+          return { monetizationEnabled: false };
+        }
+        const locked = lockedFileIds.has(file.id);
+        return {
+          monetizationEnabled: true,
+          pricedCostMinor: postMonetization.pricedCostMinor,
+          paywalled: locked,
+        };
+      };
+
       if (isStreamedMedia && lockedFileIds.has(file.id)) {
         mediaPlayback.push('');
         mediaMetadata.push({
@@ -203,7 +268,8 @@ export class PostService {
           mimeType: file.mimetype,
           originalFilename: file.originalname,
           requiresAuth: true,
-          paywalled: true,
+          ...streamMonetizationFields(),
+          ...trailerExtras(),
         });
         continue;
       }
@@ -216,13 +282,14 @@ export class PostService {
           mimeType: file.mimetype,
           originalFilename: file.originalname,
           requiresAuth: directRequiresAuth,
+          ...trailerExtras(),
         });
         continue;
       }
 
       const useStreaming = file.size > this.videoDirectPlaybackMaxBytes;
       let requiresAuth = useStreaming ? true : directRequiresAuth;
-      if (postMonetizationEnabled && isStreamedMedia) {
+      if (postMonetization.enabled && isStreamedMedia) {
         requiresAuth = true;
       }
       mediaPlayback.push(
@@ -235,6 +302,8 @@ export class PostService {
         originalFilename: file.originalname,
         requiresAuth,
         playbackMode: useStreaming ? 'stream' : 'direct',
+        ...streamMonetizationFields(),
+        ...trailerExtras(),
       });
     }
 
@@ -249,14 +318,17 @@ export class PostService {
     mediaPlayback: string[];
     mediaMetadata: (PostMediaMetadataEntry | null)[];
   } {
-    const monetizedPost = post.monetizationEnabled === true;
+    const postMonetization = {
+      enabled: post.monetizationEnabled === true,
+      pricedCostMinor: post.pricedCostMinor ?? null,
+    };
     const { mediaPlayback, mediaMetadata } = post.media?.length
       ? this.buildMediaPlaybackAndMetadata(
           post.media,
           post.mediaTypes ?? [],
           fileByUrl,
           lockedFileIds,
-          monetizedPost,
+          postMonetization,
         )
       : { mediaPlayback: [], mediaMetadata: [] };
 
@@ -270,7 +342,7 @@ export class PostService {
                   block.mediaTypes ?? [],
                   fileByUrl,
                   lockedFileIds,
-                  monetizedPost,
+                  postMonetization,
                 )
               : {
                   mediaPlayback: [] as string[],
@@ -402,6 +474,11 @@ export class PostService {
         pricedCostMinor: breakdown.costMinor,
       },
     });
+  }
+
+  /** Recompute monetization pricing from video metadata (admin / support). */
+  async syncMonetizationPricingForPost(postId: string): Promise<void> {
+    await this.syncMonetizationPricingToDb(postId);
   }
 
   private async viewerUserIdFromEmail(
@@ -599,11 +676,16 @@ export class PostService {
         await this.incrementParentPostCommentCount(post.parentId, email);
       }
 
-      await this.createNotification({
-        parent_id: parentId,
-        post: post,
-        label: parentId ? 'comment.added' : 'post.created',
-      });
+      if (published) {
+        await this.createNotification({
+          parent_id: parentId,
+          post,
+          label: parentId ? 'comment.added' : 'post.created',
+        });
+        void this.notifyMentionsForPost(post).catch((err) =>
+          this.logger.warn(`notifyMentionsForPost failed: ${String(err)}`),
+        );
+      }
 
       const viewerUserId = await this.viewerUserIdFromEmail(email);
       return this.withMediaPlayback(post, viewerUserId);
@@ -618,24 +700,162 @@ export class PostService {
 
   async createNotification(options: {
     parent_id?: string;
-    post: Post;
+    post: Post & {
+      author?: {
+        id: string;
+        name: string;
+        img: string | null;
+        username: string;
+      };
+    };
     label: NotificationTypes;
   }) {
+    if (options.label === 'post.liked') {
+      return;
+    }
+
     if (!options.parent_id) {
       return;
     }
 
     const parent_post = await this.findParentPost(options.parent_id, false);
-    const recipient = await this.userService.findUser(parent_post.authorId);
-    const postWithAuthor = options.post as Post & {
-      author?: { name: string };
-    };
-    const commenterName = postWithAuthor.author?.name ?? 'Someone';
+    if (parent_post.authorId === options.post.authorId) {
+      return;
+    }
+
+    const recipient = await this.prisma.user.findUnique({
+      where: { id: parent_post.authorId },
+    });
+    if (!recipient) {
+      return;
+    }
+
+    const commenter = options.post.author;
+    const commenterName = commenter?.name ?? 'Someone';
 
     await this.notificationService.create({
       user: recipient,
-      description: `${commenterName} commented on your post`,
+      description: `${commenterName} replied to you`,
       type: NotificationType.COMMENT_ADDED,
+      author: commenter
+        ? {
+            id: commenter.id,
+            name: commenter.name,
+            img: commenter.img ?? undefined,
+            username: commenter.username,
+          }
+        : undefined,
+      postId: parent_post.id,
+      commentId: options.post.id,
+    });
+  }
+
+  private collectTextsForMentionsFromPost(post: {
+    text?: string | null;
+    longPost?: { content?: Array<{ text?: string | null }> } | null;
+  }): (string | null | undefined)[] {
+    const texts: (string | null | undefined)[] = [post.text];
+    for (const block of post.longPost?.content ?? []) {
+      texts.push(block.text);
+    }
+    return texts;
+  }
+
+  private extractMentionUsernames(
+    texts: (string | null | undefined)[],
+  ): string[] {
+    const re = /@([\w]+)/g;
+    const out = new Set<string>();
+    for (const t of texts) {
+      if (!t) continue;
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(t)) !== null) {
+        out.add(m[1]);
+      }
+    }
+    return [...out];
+  }
+
+  private async notifyMentionsForPost(
+    post: Post & {
+      author?: {
+        id: string;
+        name: string;
+        img: string | null;
+        username: string;
+      };
+    },
+  ): Promise<void> {
+    const handles = this.extractMentionUsernames(
+      this.collectTextsForMentionsFromPost(post),
+    );
+    if (handles.length === 0) {
+      return;
+    }
+
+    const authorId = post.authorId;
+    const authorPartial = post.author;
+
+    for (const username of handles) {
+      const mentioned = await this.prisma.user.findFirst({
+        where: { username: { equals: username, mode: 'insensitive' } },
+      });
+      if (!mentioned || mentioned.id === authorId) {
+        continue;
+      }
+
+      await this.notificationService.create({
+        user: mentioned as User,
+        type: NotificationType.USER_MENTIONED,
+        description: `${authorPartial?.name ?? 'Someone'} mentioned you in a post`,
+        author: authorPartial
+          ? {
+              id: authorPartial.id,
+              name: authorPartial.name,
+              img: authorPartial.img ?? undefined,
+              username: authorPartial.username,
+            }
+          : undefined,
+        postId: post.id,
+        mentionedUserId: mentioned.id,
+      });
+    }
+  }
+
+  private async notifyPostLiked(
+    post: Post & {
+      author?: {
+        id: string;
+        name: string;
+        img: string | null;
+        username: string;
+      };
+    },
+    liker: User,
+  ): Promise<void> {
+    if (post.authorId === liker.id) {
+      return;
+    }
+
+    const recipient = await this.prisma.user.findUnique({
+      where: { id: post.authorId },
+    });
+    if (!recipient) {
+      return;
+    }
+
+    await this.notificationService.create({
+      user: recipient,
+      type: NotificationType.POST_LIKED,
+      description: `${liker.name} liked your post`,
+      author: {
+        id: liker.id,
+        name: liker.name,
+        img: liker.img,
+        username: liker.username,
+      },
+      postId: post.id,
     });
   }
 
@@ -834,7 +1054,11 @@ export class PostService {
     );
   }
 
-  async likePost(postId: string, email: string): Promise<Post> {
+  async likePost(
+    postId: string,
+    email: string,
+    desiredLiked?: boolean,
+  ): Promise<Post> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { email },
@@ -853,21 +1077,31 @@ export class PostService {
         throw new NotFoundException('Post not found');
       }
 
-      const status = (await this.checkIfUserLikedPost(postId, email)).status;
+      const likedBefore = (await this.checkIfUserLikedPost(postId, email))
+        .status;
+      const targetLiked =
+        desiredLiked !== undefined ? desiredLiked : !likedBefore;
+
+      if (targetLiked === likedBefore) {
+        return await this.viewSinglePost(postId, email);
+      }
+
       const updated_post = await this.updatePost({
         where: { id: postId },
         data: {
-          likedBy: status ? { disconnect: { email } } : { connect: { email } },
-          likeCount: status ? post.likeCount - 1 : post.likeCount + 1,
+          likedBy: targetLiked
+            ? { connect: { email } }
+            : { disconnect: { email } },
+          likeCount: targetLiked ? post.likeCount + 1 : post.likeCount - 1,
         },
         email,
       });
 
-      this.createNotification({
-        label: 'post.liked',
-        parent_id: null,
-        post: updated_post,
-      });
+      if (targetLiked && !likedBefore) {
+        void this.notifyPostLiked(updated_post, user).catch((err) =>
+          this.logger.warn(`notifyPostLiked failed: ${String(err)}`),
+        );
+      }
 
       return updated_post;
     } catch (error) {
@@ -875,7 +1109,11 @@ export class PostService {
     }
   }
 
-  async bookmarkPost(postId: string, email: string): Promise<Post> {
+  async bookmarkPost(
+    postId: string,
+    email: string,
+    desiredBookmarked?: boolean,
+  ): Promise<Post> {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -893,15 +1131,27 @@ export class PostService {
       throw new NotFoundException('Post not found');
     }
 
-    const status = (await this.checkIfUserBookmarkedPost(postId, email)).status;
+    const bookmarkedBefore = (
+      await this.checkIfUserBookmarkedPost(postId, email)
+    ).status;
+    const targetBookmarked =
+      desiredBookmarked !== undefined
+        ? desiredBookmarked
+        : !bookmarkedBefore;
+
+    if (targetBookmarked === bookmarkedBefore) {
+      return await this.viewSinglePost(postId, email);
+    }
 
     return this.updatePost({
       where: { id: postId },
       data: {
-        bookmarkedBy: status
-          ? { disconnect: { email } }
-          : { connect: { email } },
-        bookmarkCount: status ? post.bookmarkCount - 1 : post.bookmarkCount + 1,
+        bookmarkedBy: targetBookmarked
+          ? { connect: { email } }
+          : { disconnect: { email } },
+        bookmarkCount: targetBookmarked
+          ? post.bookmarkCount + 1
+          : post.bookmarkCount - 1,
       },
       email,
     });

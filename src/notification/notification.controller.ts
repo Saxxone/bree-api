@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
   Sse,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -21,6 +22,7 @@ import {
 } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { NotificationService } from './notification.service';
+import type { JwtPayload } from 'src/auth/auth.guard';
 
 @Controller('notifications')
 export class NotificationController {
@@ -50,8 +52,9 @@ export class NotificationController {
 
     const postCreated$ = handleEvent('post.created');
     const commentAdded$ = handleEvent('comment.added');
+    const postLiked$ = handleEvent('post.liked');
 
-    return merge(postCreated$, commentAdded$);
+    return merge(postCreated$, commentAdded$, postLiked$);
   }
 
   @Post()
@@ -60,13 +63,28 @@ export class NotificationController {
   }
 
   @Get()
-  findAll(@Query('skip') skip: number, @Query('take') take: number) {
-    return this.notificationService.findAll(skip, take);
+  findAll(
+    @Request() req: { user: JwtPayload },
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    const s = Number.parseInt(String(skip ?? '0'), 10);
+    const t = Number.parseInt(String(take ?? '50'), 10);
+    return this.notificationService.findAll(
+      Number.isFinite(s) ? Math.max(0, s) : 0,
+      Number.isFinite(t) ? Math.min(Math.max(1, t), 100) : 50,
+      req.user.userId,
+    );
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.notificationService.findOne(id);
+  }
+
+  @Patch('read-all')
+  markAllRead(@Request() req: { user: JwtPayload }) {
+    return this.notificationService.markAllRead(req.user.userId);
   }
 
   @Patch(':id')

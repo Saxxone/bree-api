@@ -1,11 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
 import {
+  DiskHealthIndicator,
+  HealthCheck,
   HealthCheckService,
   HttpHealthIndicator,
-  HealthCheck,
-  PrismaHealthIndicator,
-  DiskHealthIndicator,
   MemoryHealthIndicator,
+  PrismaHealthIndicator,
 } from '@nestjs/terminus';
 import { Public } from 'src/auth/auth.guard';
 import { api_base_url, ui_base_url } from '../utils';
@@ -28,7 +28,7 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.http.pingCheck('bree-api', this.url + '/hello'),
+      () => this.http.pingCheck('afovid-api', this.url + '/hello'),
     ]);
   }
 
@@ -39,7 +39,7 @@ export class HealthController {
     return this.health.check([
       () =>
         this.http.responseCheck(
-          'bree-web',
+          'afovid-web',
           this.ui_url + '/login',
           (res) => res.status === 200,
         ),
@@ -51,7 +51,7 @@ export class HealthController {
   @HealthCheck()
   databaseCheck() {
     return this.health.check([
-      () => this.http.pingCheck('bree-db', 'database'),
+      () => this.http.pingCheck('afovid-db', 'database'),
     ]);
   }
 
