@@ -35,6 +35,11 @@ type PostWithLongPostMedia = Post & {
   } | null;
 };
 
+type PostWithListRelations = PostWithLongPostMedia & {
+  likedBy: User[];
+  bookmarkedBy: User[];
+};
+
 /** Per-asset metadata aligned with `media` / `mediaPlayback` (null if file row missing). */
 export type PostMediaMetadataEntry = {
   fileId: string;
@@ -103,6 +108,22 @@ function parseMediaDirectUrlRequiresAuth(): boolean {
 @Injectable()
 export class PostService {
   private readonly logger = new Logger(PostService.name);
+
+  /** Published posts that include at least one video (short media or long-post block). */
+  private static readonly postHasVideoWhere: Prisma.PostWhereInput = {
+    OR: [
+      { type: PostType.SHORT, mediaTypes: { has: 'video' } },
+      {
+        longPost: {
+          content: {
+            some: {
+              mediaTypes: { has: 'video' },
+            },
+          },
+        },
+      },
+    ],
+  };
 
   /** Used after writes to avoid concurrent pg `client.query()` on one connection (Prisma adapter-pg + pg ≥8.20). */
   private readonly defaultPostInclude: Prisma.PostInclude = {
@@ -1274,6 +1295,218 @@ export class PostService {
       this.enrichPostPlayback(c, fileByUrl, new Set()),
     );
     return { ...enrichedMain, comments: enrichedComments } as Post;
+  }
+
+  private postContainsVideoRow(post: {
+    type: PostType;
+    mediaTypes: string[];
+    longPost: {
+      content: Array<{ mediaTypes: string[] }>;
+    } | null;
+  }): boolean {
+    if (
+      post.type === PostType.SHORT &&
+      (post.mediaTypes ?? []).includes('video')
+    ) {
+      return true;
+    }
+    return (post.longPost?.content ?? []).some((c) =>
+      (c.mediaTypes ?? []).includes('video'),
+    );
+  }
+
+  /**
+   * Upserts watch history for a published video post. No-op (recorded: false) when the post has no video.
+   */
+  async recordWatch(
+    postId: string,
+    email: string,
+  ): Promise<{ recorded: boolean }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, deletedAt: null, published: true },
+      select: {
+        id: true,
+        type: true,
+        mediaTypes: true,
+        longPost: {
+          select: {
+            content: { select: { mediaTypes: true } },
+          },
+        },
+      },
+    });
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+    if (!this.postContainsVideoRow(post)) {
+      return { recorded: false };
+    }
+
+    await this.prisma.postWatchHistory.upsert({
+      where: {
+        userId_postId: { userId: user.id, postId },
+      },
+      create: { userId: user.id, postId },
+      update: { lastWatchedAt: new Date() },
+    });
+    return { recorded: true };
+  }
+
+  async getMyWatchHistory(
+    email: string,
+    page: { skip?: number; take?: number },
+  ): Promise<Post[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const take = page.take ?? 10;
+    const skip = page.skip ?? 0;
+
+    const rows = await this.prisma.postWatchHistory.findMany({
+      where: {
+        userId: user.id,
+        post: {
+          deletedAt: null,
+          published: true,
+          ...PostService.postHasVideoWhere,
+        },
+      },
+      orderBy: { lastWatchedAt: 'desc' },
+      skip,
+      take,
+      select: { postId: true },
+    });
+
+    const ids = rows.map((r) => r.postId);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: { id: { in: ids } },
+      include: this.defaultPostInclude,
+    });
+    const byId = new Map(posts.map((p) => [p.id, p]));
+    const ordered: PostWithLongPostMedia[] = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (row) ordered.push(row as PostWithLongPostMedia);
+    }
+
+    const postsWithUserFlags = ordered.map((post) => {
+      const p = post as PostWithListRelations;
+      return {
+        ...p,
+        likedByMe: p.likedBy.some((u) => u.email === email),
+        bookmarkedByMe: p.bookmarkedBy.some((u) => u.email === email),
+      };
+    });
+
+    return this.withMediaPlaybackMany(
+      postsWithUserFlags as PostWithLongPostMedia[],
+      user.id,
+    );
+  }
+
+  /**
+   * Liked posts that contain video. Ordered by post `createdAt` (implicit like relation has no timestamp).
+   */
+  async getMyLikedVideos(
+    email: string,
+    page: {
+      skip?: number;
+      take?: number;
+      cursor?: Prisma.PostWhereUniqueInput;
+    },
+  ): Promise<Post[]> {
+    return this.getMultiplePosts({
+      where: {
+        published: true,
+        deletedAt: null,
+        likedBy: { some: { email } },
+        ...PostService.postHasVideoWhere,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
+      currentUserEmail: email,
+    });
+  }
+
+  /** Coin-unlocked posts that contain video, most recently unlocked first. */
+  async getMyUnlockedPosts(
+    email: string,
+    page: { skip?: number; take?: number },
+  ): Promise<Post[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const take = page.take ?? 10;
+    const skip = page.skip ?? 0;
+
+    const rows = await this.prisma.postUnlock.findMany({
+      where: {
+        userId: user.id,
+        post: {
+          deletedAt: null,
+          published: true,
+          ...PostService.postHasVideoWhere,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take,
+      select: { postId: true },
+    });
+
+    const ids = rows.map((r) => r.postId);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: { id: { in: ids } },
+      include: this.defaultPostInclude,
+    });
+    const byId = new Map(posts.map((p) => [p.id, p]));
+    const ordered: PostWithLongPostMedia[] = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (row) ordered.push(row as PostWithLongPostMedia);
+    }
+
+    const postsWithUserFlags = ordered.map((post) => {
+      const p = post as PostWithListRelations;
+      return {
+        ...p,
+        likedByMe: p.likedBy.some((u) => u.email === email),
+        bookmarkedByMe: p.bookmarkedBy.some((u) => u.email === email),
+      };
+    });
+
+    return this.withMediaPlaybackMany(
+      postsWithUserFlags as PostWithLongPostMedia[],
+      user.id,
+    );
   }
 
   async deletePost(where: Prisma.PostWhereUniqueInput): Promise<Post> {

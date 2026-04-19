@@ -123,6 +123,69 @@ export class PostController {
     );
   }
 
+  @Post('watch/:id')
+  async recordWatch(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<{ recorded: boolean }> {
+    return await this.postService.recordWatch(String(id), req.user.sub);
+  }
+
+  @Get('me/watch-history')
+  async getMyWatchHistory(
+    @Request() req: any,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
+  ): Promise<PostModel[]> {
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
+    return await this.postService.getMyWatchHistory(req.user.sub, {
+      skip: page.skip,
+      take: page.take,
+    });
+  }
+
+  @Get('me/liked-videos')
+  async getMyLikedVideos(
+    @Request() req: any,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
+  ): Promise<PostModel[]> {
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
+    return await this.postService.getMyLikedVideos(req.user.sub, {
+      skip: page.skip,
+      take: page.take,
+      cursor: page.cursor,
+    });
+  }
+
+  @Get('me/unlocked')
+  async getMyUnlockedPosts(
+    @Request() req: any,
+    @Query('skip') skipQ?: number | string,
+    @Query('take') takeQ?: number | string,
+    @Query('cursor') cursorQ?: string | string[],
+  ): Promise<PostModel[]> {
+    const page = parsePostListPagination({
+      skip: skipQ,
+      take: takeQ,
+      cursor: cursorQ,
+    });
+    return await this.postService.getMyUnlockedPosts(req.user.sub, {
+      skip: page.skip,
+      take: page.take,
+    });
+  }
+
   /** Must be registered before `@Get('/:id')` so `/posts/comments/:id` matches. */
   @Get('/comments/:id')
   async getCommentsForPost(

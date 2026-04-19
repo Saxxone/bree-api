@@ -3,7 +3,7 @@ CREATE TABLE "PostWatchHistory" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "postId" TEXT NOT NULL,
-    "lastWatchedAt" TIMESTAMP(3) NOT NULL,
+    "lastWatchedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PostWatchHistory_pkey" PRIMARY KEY ("id")
 );

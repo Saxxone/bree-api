@@ -57,7 +57,8 @@ describe('RoomService', () => {
             { participants: { some: { id: 'u2' } } } as any,
             {
               participants: {
-                every: { id: { in: ['u1', 'u2'] } } },
+                every: { id: { in: ['u1', 'u2'] } },
+              },
             } as any,
           ]),
         }),
