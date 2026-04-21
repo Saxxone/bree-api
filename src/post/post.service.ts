@@ -555,9 +555,10 @@ export class PostService {
     }
   > {
     const rawQuoted = post.quotedPost;
-    const { quotedPost: _drop, ...postMain } = post as PostWithLongPostMedia & {
+    const { quotedPost, ...postMain } = post as PostWithLongPostMedia & {
       quotedPost?: PostWithLongPostMedia | null;
     };
+    void quotedPost;
     const locked =
       await this.streamMonetization.getLockedVideoFileIdsForPostView(
         {
@@ -593,10 +594,11 @@ export class PostService {
         },
         viewerUserId,
       );
-    const { quotedPost: _q2, ...quotedMain } =
+    const { quotedPost: quotedNested, ...quotedMain } =
       rawQuoted as PostWithLongPostMedia & {
         quotedPost?: PostWithLongPostMedia | null;
       };
+    void quotedNested;
     const enrichedQuoted = this.enrichPostPlayback(
       quotedMain as PostWithLongPostMedia,
       fileByUrl,
