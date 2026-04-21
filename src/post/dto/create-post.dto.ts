@@ -54,6 +54,12 @@ export class CreatePostDto {
   @IsString()
   parentId?: string;
 
+  /** Embed another post as a quote (distinct from `parentId` comment threading). */
+  @IsOptional()
+  @Allow()
+  @IsString()
+  quotedPostId?: string;
+
   @IsOptional()
   @Allow()
   @ValidateNested()

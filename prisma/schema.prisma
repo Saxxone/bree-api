@@ -90,6 +90,10 @@ model Post {
   pricedCostMinor          Int?
   postUnlocks              PostUnlock[]
   watchHistory             PostWatchHistory[]
+  /// Optional embedded quote of another published post (not the same as `parentId` / comments).
+  quotedPostId             String?
+  quotedPost               Post?        @relation("PostQuotedPost", fields: [quotedPostId], references: [id], onDelete: SetNull)
+  postsQuotingThis         Post[]       @relation("PostQuotedPost")
 }
 
 model LongPost {

@@ -66,7 +66,11 @@ export class CoinPurchaseService {
     });
   }
 
-  async createStripeCheckoutSession(userId: string, packageId: string) {
+  async createStripeCheckoutSession(
+    userId: string,
+    packageId: string,
+    client: 'web' | 'native' = 'web',
+  ) {
     const pkg = await this.prisma.coinPackage.findFirst({
       where: { id: packageId, active: true },
     });
@@ -81,12 +85,26 @@ export class CoinPurchaseService {
       );
     }
 
+    const scheme =
+      this.config.get<string>('MOBILE_APP_URL_SCHEME')?.replace(/:$/, '') ??
+      'myapp';
+    const nativeSuccess =
+      this.config.get<string>('STRIPE_CHECKOUT_NATIVE_SUCCESS_URL') ??
+      `${scheme}://coins/success?session_id={CHECKOUT_SESSION_ID}`;
+    const nativeCancel =
+      this.config.get<string>('STRIPE_CHECKOUT_NATIVE_CANCEL_URL') ??
+      `${scheme}://coins/cancel`;
+
     const successUrl =
-      this.config.get<string>('STRIPE_CHECKOUT_SUCCESS_URL') ??
-      `${this.config.get<string>('UI_BASE_URL') ?? 'http://localhost:4000'}/coins/success?session_id={CHECKOUT_SESSION_ID}`;
+      client === 'native'
+        ? nativeSuccess
+        : (this.config.get<string>('STRIPE_CHECKOUT_SUCCESS_URL') ??
+          `${this.config.get<string>('UI_BASE_URL') ?? 'http://localhost:4000'}/coins/success?session_id={CHECKOUT_SESSION_ID}`);
     const cancelUrl =
-      this.config.get<string>('STRIPE_CHECKOUT_CANCEL_URL') ??
-      `${this.config.get<string>('UI_BASE_URL') ?? 'http://localhost:4000'}/coins/cancel`;
+      client === 'native'
+        ? nativeCancel
+        : (this.config.get<string>('STRIPE_CHECKOUT_CANCEL_URL') ??
+          `${this.config.get<string>('UI_BASE_URL') ?? 'http://localhost:4000'}/coins/cancel`);
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

@@ -33,6 +33,7 @@ type PostWithLongPostMedia = Post & {
     id: string;
     content?: Array<{ media: string[]; mediaTypes: string[] }>;
   } | null;
+  quotedPost?: PostWithLongPostMedia | null;
 };
 
 type PostWithListRelations = PostWithLongPostMedia & {
@@ -143,6 +144,26 @@ export class PostService {
         content: true,
       },
     },
+    quotedPost: {
+      include: {
+        likedBy: true,
+        bookmarkedBy: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            img: true,
+            username: true,
+          },
+        },
+        longPost: {
+          select: {
+            id: true,
+            content: true,
+          },
+        },
+      },
+    },
   };
 
   constructor(
@@ -177,7 +198,7 @@ export class PostService {
 
   private collectMediaUrlsFromPosts(posts: PostWithLongPostMedia[]): string[] {
     const urls = new Set<string>();
-    for (const post of posts) {
+    const visit = (post: PostWithLongPostMedia) => {
       post.media?.forEach((u) => {
         if (u) urls.add(u);
       });
@@ -187,6 +208,13 @@ export class PostService {
           if (u) urls.add(u);
         });
       }
+      const q = post.quotedPost;
+      if (q) {
+        visit(q as PostWithLongPostMedia);
+      }
+    };
+    for (const post of posts) {
+      visit(post);
     }
     return [...urls];
   }
@@ -516,6 +544,73 @@ export class PostService {
     return u?.id;
   }
 
+  private async enrichPostTree(
+    post: PostWithLongPostMedia,
+    fileByUrl: Map<string, FileRowForPlayback>,
+    viewerUserId?: string,
+  ): Promise<
+    PostWithLongPostMedia & {
+      mediaPlayback: string[];
+      mediaMetadata: (PostMediaMetadataEntry | null)[];
+    }
+  > {
+    const rawQuoted = post.quotedPost;
+    const { quotedPost: _drop, ...postMain } = post as PostWithLongPostMedia & {
+      quotedPost?: PostWithLongPostMedia | null;
+    };
+    const locked =
+      await this.streamMonetization.getLockedVideoFileIdsForPostView(
+        {
+          id: postMain.id,
+          authorId: postMain.authorId,
+          published: postMain.published,
+          monetizationEnabled: postMain.monetizationEnabled,
+          media: postMain.media ?? [],
+          longPost: postMain.longPost,
+        },
+        viewerUserId,
+      );
+    const enriched = this.enrichPostPlayback(
+      postMain as PostWithLongPostMedia,
+      fileByUrl,
+      locked,
+    );
+    if (!rawQuoted) {
+      return enriched as PostWithLongPostMedia & {
+        mediaPlayback: string[];
+        mediaMetadata: (PostMediaMetadataEntry | null)[];
+      };
+    }
+    const lockedQ =
+      await this.streamMonetization.getLockedVideoFileIdsForPostView(
+        {
+          id: rawQuoted.id,
+          authorId: rawQuoted.authorId,
+          published: rawQuoted.published,
+          monetizationEnabled: rawQuoted.monetizationEnabled,
+          media: rawQuoted.media ?? [],
+          longPost: rawQuoted.longPost,
+        },
+        viewerUserId,
+      );
+    const { quotedPost: _q2, ...quotedMain } =
+      rawQuoted as PostWithLongPostMedia & {
+        quotedPost?: PostWithLongPostMedia | null;
+      };
+    const enrichedQuoted = this.enrichPostPlayback(
+      quotedMain as PostWithLongPostMedia,
+      fileByUrl,
+      lockedQ,
+    );
+    return {
+      ...enriched,
+      quotedPost: enrichedQuoted,
+    } as PostWithLongPostMedia & {
+      mediaPlayback: string[];
+      mediaMetadata: (PostMediaMetadataEntry | null)[];
+    };
+  }
+
   private async withMediaPlayback(
     post: PostWithLongPostMedia,
     viewerUserId?: string,
@@ -528,19 +623,7 @@ export class PostService {
     const fileByUrl = await this.fileService.findFilesByUrls(
       this.collectMediaUrlsFromPosts([post]),
     );
-    const locked =
-      await this.streamMonetization.getLockedVideoFileIdsForPostView(
-        {
-          id: post.id,
-          authorId: post.authorId,
-          published: post.published,
-          monetizationEnabled: post.monetizationEnabled,
-          media: post.media ?? [],
-          longPost: post.longPost,
-        },
-        viewerUserId,
-      );
-    return this.enrichPostPlayback(post, fileByUrl, locked);
+    return this.enrichPostTree(post, fileByUrl, viewerUserId);
   }
 
   private async withMediaPlaybackMany(
@@ -561,21 +644,7 @@ export class PostService {
       this.collectMediaUrlsFromPosts(posts),
     );
     return Promise.all(
-      posts.map(async (p) => {
-        const locked =
-          await this.streamMonetization.getLockedVideoFileIdsForPostView(
-            {
-              id: p.id,
-              authorId: p.authorId,
-              published: p.published,
-              monetizationEnabled: p.monetizationEnabled,
-              media: p.media ?? [],
-              longPost: p.longPost,
-            },
-            viewerUserId,
-          );
-        return this.enrichPostPlayback(p, fileByUrl, locked);
-      }),
+      posts.map((p) => this.enrichPostTree(p, fileByUrl, viewerUserId)),
     );
   }
 
@@ -605,6 +674,22 @@ export class PostService {
         throw new BadRequestException(
           'videoCategory is required when monetization is enabled',
         );
+      }
+
+      if (data.quotedPostId) {
+        const quoted = await this.prisma.post.findFirst({
+          where: {
+            id: data.quotedPostId,
+            deletedAt: null,
+            published: true,
+          },
+          select: { id: true },
+        });
+        if (!quoted) {
+          throw new BadRequestException(
+            'Quoted post not found or is not published',
+          );
+        }
       }
 
       const fileIds = data.media ?? [];
@@ -933,6 +1018,26 @@ export class PostService {
             content: true,
           },
         },
+        quotedPost: {
+          include: {
+            likedBy: true,
+            bookmarkedBy: true,
+            author: {
+              select: {
+                id: true,
+                name: true,
+                img: true,
+                username: true,
+              },
+            },
+            longPost: {
+              select: {
+                id: true,
+                content: true,
+              },
+            },
+          },
+        },
       },
     });
     if (!post) {
@@ -1012,6 +1117,26 @@ export class PostService {
           select: {
             id: true,
             content: true,
+          },
+        },
+        quotedPost: {
+          include: {
+            likedBy: true,
+            bookmarkedBy: true,
+            author: {
+              select: {
+                id: true,
+                name: true,
+                img: true,
+                username: true,
+              },
+            },
+            longPost: {
+              select: {
+                id: true,
+                content: true,
+              },
+            },
           },
         },
       },

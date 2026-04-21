@@ -67,6 +67,7 @@ export class CoinsController {
     return this.purchase.createStripeCheckoutSession(
       req.user.userId,
       body.packageId,
+      body.client ?? 'web',
     );
   }
 
