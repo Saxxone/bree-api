@@ -9,10 +9,7 @@ import { R2StorageService } from './r2-storage.service';
 import { VideoTranscodeProcessor } from './video-transcode.processor';
 
 @Module({
-  imports: [
-    CoinsModule,
-    BullModule.registerQueue({ name: 'video-transcode' }),
-  ],
+  imports: [CoinsModule, BullModule.registerQueue({ name: 'video-transcode' })],
   controllers: [FileController],
   providers: [
     FileService,

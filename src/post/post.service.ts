@@ -357,7 +357,9 @@ export class PostService {
           ? `${resolveFileBaseUrl()}${file.r2ManifestKey.replace(/^\//, '')}`
           : null;
       mediaPlayback.push(
-        useStreaming ? this.streamUrlForFileId(file.id) : (cdnHlsPlaybackUrl ?? directPlaybackUrl),
+        useStreaming
+          ? this.streamUrlForFileId(file.id)
+          : (cdnHlsPlaybackUrl ?? directPlaybackUrl),
       );
       mediaMetadata.push({
         fileId: file.id,
