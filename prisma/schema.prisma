@@ -17,6 +17,18 @@ enum UserRole {
   SUPERADMIN
 }
 
+enum FileTranscodeStatus {
+  NOT_APPLICABLE
+  PENDING
+  READY
+  FAILED
+}
+
+enum FilePlaybackKind {
+  PROGRESSIVE
+  HLS
+}
+
 model User {
   id                        String                     @id @default(uuid())
   email                     String                     @unique
@@ -116,19 +128,20 @@ model LongPostBlock {
 }
 
 model File {
-  id                    String    @id @default(uuid())
+  id                    String               @id @default(uuid())
   originalname          String
   filename              String
   size                  Int
   type                  String
   url                   String
-  path                  String
+  /// Local absolute path while on disk; cleared after successful R2 transcode.
+  path                  String?
   mimetype              String
-  status                Status    @default(PENDING)
-  owner                 User      @relation(fields: [ownerId], references: [id])
+  status                Status               @default(PENDING)
+  owner                 User                 @relation(fields: [ownerId], references: [id])
   ownerId               String
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
   deletedAt             DateTime?
   videoWidth            Int?
   videoHeight           Int?
@@ -136,6 +149,12 @@ model File {
   trailerFilename       String?
   trailerPath           String?
   trailerUrl            String?
+  transcodeStatus       FileTranscodeStatus  @default(NOT_APPLICABLE)
+  playbackKind          FilePlaybackKind?
+  /// R2 object key for progressive MP4 used by authenticated range streaming.
+  r2MainKey             String?
+  /// R2 object key for HLS master playlist (relative to bucket; CDN URL = FILE_BASE_URL + key).
+  r2ManifestKey         String?
 }
 
 model Chat {

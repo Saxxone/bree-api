@@ -34,6 +34,12 @@ export function isHttpAccessibleUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
+/** True when `FILE_BASE_URL` is set to an external https origin (e.g. Bunny CDN), not the API media fallback. */
+export function hasExternalFileCdnConfigured(): boolean {
+  const raw = process.env.FILE_BASE_URL?.trim();
+  return !!raw && /^https?:\/\//i.test(raw);
+}
+
 /** GET /api/file/media/:filename — range-capable, public for UPLOADED files. */
 export function mediaFilePublicUrl(filename: string): string {
   const api = (process.env.API_BASE_URL ?? 'http://localhost:3000').replace(

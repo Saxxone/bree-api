@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  FileTranscodeStatus,
   NotificationType,
   Post,
   PostType,
@@ -17,8 +18,10 @@ import {
 import { CoinPricingService } from 'src/coins/coin-pricing.service';
 import { FileService } from 'src/file/file.service';
 import {
+  hasExternalFileCdnConfigured,
   isHttpAccessibleUrl,
   mediaFilePublicUrl,
+  resolveFileBaseUrl,
 } from 'src/file/media-storage';
 import { NotificationTypes } from 'src/notification/dto/create-notification.dto';
 import { NotificationService } from 'src/notification/notification.service';
@@ -83,6 +86,9 @@ type FileRowForPlayback = {
   status: FileStatus;
   trailerFilename: string | null;
   trailerUrl: string | null;
+  r2MainKey: string | null;
+  r2ManifestKey: string | null;
+  transcodeStatus: FileTranscodeStatus;
 };
 
 function parseVideoDirectPlaybackMaxBytes(): number {
@@ -342,8 +348,16 @@ export class PostService {
       if (postMonetization.enabled && isStreamedMedia) {
         requiresAuth = true;
       }
+      const cdnHlsPlaybackUrl =
+        !useStreaming &&
+        isStreamedMedia &&
+        file.transcodeStatus === FileTranscodeStatus.READY &&
+        file.r2ManifestKey &&
+        hasExternalFileCdnConfigured()
+          ? `${resolveFileBaseUrl()}${file.r2ManifestKey.replace(/^\//, '')}`
+          : null;
       mediaPlayback.push(
-        useStreaming ? this.streamUrlForFileId(file.id) : directPlaybackUrl,
+        useStreaming ? this.streamUrlForFileId(file.id) : (cdnHlsPlaybackUrl ?? directPlaybackUrl),
       );
       mediaMetadata.push({
         fileId: file.id,

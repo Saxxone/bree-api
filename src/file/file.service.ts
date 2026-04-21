@@ -12,13 +12,20 @@ import {
   Status,
   File as FileModel,
   StreamQuality,
+  FileTranscodeStatus,
+  FilePlaybackKind,
 } from '@prisma/client';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
-import { dirname, join, resolve, isAbsolute } from 'path';
+import { dirname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { UpdateFileDto } from './dto/update-file.dto';
-import { getMediaStorageDir, resolveFileBaseUrl } from './media-storage';
+import { mediaFilePublicUrl, resolveFileBaseUrl } from './media-storage';
+import { isR2ObjectStoreEnabled } from './media-object-store';
+import { R2StorageService } from './r2-storage.service';
+import { resolveDiskPathForFile } from './file-path.util';
 import {
   dimensionsToStreamQuality,
   extractFilenameFromMediaUrl,
@@ -59,6 +66,8 @@ export class FileService {
   constructor(
     private readonly userService: UserService,
     private readonly prisma: PrismaService,
+    private readonly r2Storage: R2StorageService,
+    @InjectQueue('video-transcode') private readonly videoTranscodeQueue: Queue,
   ) {}
 
   private readonly logger = new Logger();
@@ -164,8 +173,10 @@ export class FileService {
             /* ignore missing trailer on disk */
           }
         }
-        await fs.unlink(file.path);
-        console.log(`File deleted from storage: ${file.path}`);
+        if (file.path) {
+          await fs.unlink(file.path);
+          console.log(`File deleted from storage: ${file.path}`);
+        }
 
         // 2. Delete (or update) the database record
         await this.prisma.file.update({
@@ -187,32 +198,43 @@ export class FileService {
     const media_base_url = resolveFileBaseUrl();
 
     for (const file of files) {
+      const r2VideoPipeline =
+        isR2ObjectStoreEnabled() &&
+        Boolean(this.r2Storage.getConfig()) &&
+        file.mimetype.startsWith('video/');
       const savedFile = await this.prisma.file.create({
         data: {
           filename: file.filename,
           originalname: file.originalname,
           path: file.path,
-          url: media_base_url + file.filename,
+          url: r2VideoPipeline
+            ? mediaFilePublicUrl(file.filename)
+            : media_base_url + file.filename,
           mimetype: file.mimetype,
           size: file.size,
           status: Status.PENDING,
           type: file.mimetype.split('/')[0],
+          transcodeStatus: r2VideoPipeline
+            ? FileTranscodeStatus.PENDING
+            : FileTranscodeStatus.NOT_APPLICABLE,
           owner: {
             connect: { id: user.id },
           },
-        } as Prisma.FileCreateInput,
+        },
       });
       if (savedFile.type === 'video') {
-        void this.probeAndPersistVideoMetadata(savedFile.id, savedFile.path)
+        void this.probeAndPersistVideoMetadata(savedFile.id, savedFile.path!)
           .then((meta) => {
             if (meta) {
-              void this.ensureVideoTrailerForFileId(savedFile.id).catch(
-                (err) => {
-                  this.logger.warn(
-                    `Video trailer failed for file ${savedFile.id}: ${err}`,
-                  );
-                },
-              );
+              if (!r2VideoPipeline) {
+                void this.ensureVideoTrailerForFileId(savedFile.id).catch(
+                  (err) => {
+                    this.logger.warn(
+                      `Video trailer failed for file ${savedFile.id}: ${err}`,
+                    );
+                  },
+                );
+              }
             }
           })
           .catch((err) => {
@@ -260,18 +282,39 @@ export class FileService {
           throw new NotFoundException('File not found');
         }
 
-        if (file.type === 'video') {
+        if (file.type === 'video' && file.path) {
           try {
             const meta = await this.probeAndPersistVideoMetadata(
               file.id,
               file.path,
             );
             if (meta) {
-              void this.ensureVideoTrailerForFileId(file.id).catch((err) => {
-                this.logger.warn(
-                  `Video trailer failed after upload for file ${file.id}: ${err}`,
+              const r2Pipeline =
+                isR2ObjectStoreEnabled() &&
+                Boolean(this.r2Storage.getConfig()) &&
+                file.transcodeStatus === FileTranscodeStatus.PENDING;
+              if (r2Pipeline) {
+                await this.ensureVideoTrailerForFileId(file.id).catch((err) => {
+                  this.logger.warn(
+                    `Video trailer failed after upload for file ${file.id}: ${err}`,
+                  );
+                });
+                await this.videoTranscodeQueue.add(
+                  'transcode',
+                  { fileId: file.id },
+                  {
+                    removeOnComplete: true,
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 10_000 },
+                  },
                 );
-              });
+              } else {
+                void this.ensureVideoTrailerForFileId(file.id).catch((err) => {
+                  this.logger.warn(
+                    `Video trailer failed after upload for file ${file.id}: ${err}`,
+                  );
+                });
+              }
             }
           } catch (err) {
             this.logger.warn(
@@ -288,14 +331,10 @@ export class FileService {
   /**
    * ffprobe the file on disk and persist width/height/duration for video pricing.
    */
-  private resolveDiskPathForProbe(storedPath: string): string {
-    const trimmed = storedPath?.trim() ?? '';
-    if (!trimmed) {
-      return trimmed;
-    }
-    return isAbsolute(trimmed)
-      ? resolve(trimmed)
-      : resolve(getMediaStorageDir(), trimmed);
+  private resolveDiskPathForProbe(
+    storedPath: string | null | undefined,
+  ): string {
+    return resolveDiskPathForFile(storedPath);
   }
 
   async probeAndPersistVideoMetadata(
@@ -307,6 +346,9 @@ export class FileService {
     durationSeconds: number;
   } | null> {
     const diskPath = this.resolveDiskPathForProbe(absolutePath);
+    if (!diskPath) {
+      return null;
+    }
     const result = await probeVideoFile(diskPath);
     if (!result) {
       this.logger.warn(
@@ -345,6 +387,10 @@ export class FileService {
       return;
     }
 
+    if (!file.path?.trim()) {
+      return;
+    }
+
     const sourceDisk = this.resolveDiskPathForProbe(file.path);
     const previousTrailerPath = override ? file.trailerPath : null;
 
@@ -370,7 +416,7 @@ export class FileService {
       `video-${fileId.slice(0, 8)}`;
     const trailerFilename = `${stem}-trailer-${randomBytes(8).toString('hex')}.mp4`;
     const trailerPath = join(dirname(sourceDisk), trailerFilename);
-    const trailerUrl = `${resolveFileBaseUrl()}${trailerFilename}`;
+    const trailerUrl = mediaFilePublicUrl(trailerFilename);
 
     await generateVideoTrailer(sourceDisk, trailerPath, {
       durationSeconds,
@@ -484,6 +530,9 @@ export class FileService {
       let h = f.videoHeight;
       let d = f.videoDurationSeconds;
       if (w == null || h == null || d == null) {
+        if (!f.path) {
+          continue;
+        }
         const probed = await this.probeAndPersistVideoMetadata(f.id, f.path);
         if (probed) {
           w = probed.width;
@@ -573,6 +622,9 @@ export class FileService {
         mimetype: 'video/mp4',
       };
     }
+    if (!lookup.file.path?.trim()) {
+      throw new NotFoundException('File not found on disk');
+    }
     return {
       absolutePath: this.resolveDiskPathForProbe(lookup.file.path),
       mimetype: lookup.file.mimetype,
@@ -620,6 +672,10 @@ export class FileService {
         videoDurationSeconds: number | null;
         trailerFilename: string | null;
         trailerUrl: string | null;
+        r2MainKey: string | null;
+        r2ManifestKey: string | null;
+        transcodeStatus: FileTranscodeStatus;
+        playbackKind: FilePlaybackKind | null;
       }
     >
   > {
@@ -647,6 +703,10 @@ export class FileService {
         videoDurationSeconds: true,
         trailerFilename: true,
         trailerUrl: true,
+        r2MainKey: true,
+        r2ManifestKey: true,
+        transcodeStatus: true,
+        playbackKind: true,
       },
     });
     type Row = {
@@ -663,6 +723,10 @@ export class FileService {
       videoDurationSeconds: number | null;
       trailerFilename: string | null;
       trailerUrl: string | null;
+      r2MainKey: string | null;
+      r2ManifestKey: string | null;
+      transcodeStatus: FileTranscodeStatus;
+      playbackKind: FilePlaybackKind | null;
     };
     const map = new Map<string, Row>();
     for (const f of files) {
@@ -680,6 +744,10 @@ export class FileService {
         videoDurationSeconds: f.videoDurationSeconds,
         trailerFilename: f.trailerFilename,
         trailerUrl: f.trailerUrl,
+        r2MainKey: f.r2MainKey,
+        r2ManifestKey: f.r2ManifestKey,
+        transcodeStatus: f.transcodeStatus,
+        playbackKind: f.playbackKind,
       };
       map.set(f.url, row);
       map.set(f.path, row);

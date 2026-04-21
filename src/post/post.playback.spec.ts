@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Status as FileStatus } from '@prisma/client';
+import { FileTranscodeStatus, Status as FileStatus } from '@prisma/client';
 import { CoinPricingService } from 'src/coins/coin-pricing.service';
 import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
 import { FileService } from 'src/file/file.service';
@@ -52,6 +52,9 @@ describe('PostService playback URLs', () => {
           status: FileStatus.UPLOADED,
           trailerFilename: null,
           trailerUrl: null,
+          r2MainKey: null,
+          r2ManifestKey: null,
+          transcodeStatus: FileTranscodeStatus.NOT_APPLICABLE,
         },
       ],
     ]);
@@ -94,6 +97,9 @@ describe('PostService playback URLs', () => {
           status: FileStatus.UPLOADED,
           trailerFilename: null,
           trailerUrl: null,
+          r2MainKey: null,
+          r2ManifestKey: null,
+          transcodeStatus: FileTranscodeStatus.NOT_APPLICABLE,
         },
       ],
     ]);
@@ -136,6 +142,9 @@ describe('PostService playback URLs', () => {
           status: FileStatus.UPLOADED,
           trailerFilename: null,
           trailerUrl: null,
+          r2MainKey: null,
+          r2ManifestKey: null,
+          transcodeStatus: FileTranscodeStatus.NOT_APPLICABLE,
         },
       ],
     ]);
@@ -195,6 +204,9 @@ describe('PostService playback URLs', () => {
           status: FileStatus.UPLOADED,
           trailerFilename: null,
           trailerUrl: null,
+          r2MainKey: null,
+          r2ManifestKey: null,
+          transcodeStatus: FileTranscodeStatus.NOT_APPLICABLE,
         },
       ],
     ]);
@@ -251,6 +263,9 @@ describe('PostService playback URLs', () => {
           status: FileStatus.UPLOADED,
           trailerFilename,
           trailerUrl: `http://api.test/api/file/media/${trailerFilename}`,
+          r2MainKey: null,
+          r2ManifestKey: null,
+          transcodeStatus: FileTranscodeStatus.NOT_APPLICABLE,
         },
       ],
     ]);

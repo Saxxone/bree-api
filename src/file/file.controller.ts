@@ -20,11 +20,13 @@ import { extname } from 'path';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Public } from 'src/auth/auth.guard';
 import { StreamMonetizationService } from 'src/coins/stream-monetization.service';
-import { Status } from '@prisma/client';
+import { FileTranscodeStatus, Status } from '@prisma/client';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { compressFiles } from './file.manager';
 import { FileService } from './file.service';
 import { ensureMediaStorageDir, getMediaStorageDir } from './media-storage';
+import { parseSingleByteRange } from './range-bytes';
+import { R2StorageService } from './r2-storage.service';
 
 ensureMediaStorageDir();
 
@@ -76,6 +78,7 @@ export class FileController {
   constructor(
     private readonly fileService: FileService,
     private readonly streamMonetization: StreamMonetizationService,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   @UseInterceptors(
@@ -188,6 +191,24 @@ export class FileController {
     if (file.type === 'video' || file.type === 'audio') {
       await this.streamMonetization.assertStreamAllowed(file.id, user?.userId);
     }
+    if (
+      file.r2MainKey &&
+      file.transcodeStatus === FileTranscodeStatus.READY &&
+      file.status === Status.UPLOADED
+    ) {
+      await this.r2Storage.pipeRangedGetObject(
+        file.r2MainKey,
+        file.size,
+        file.mimetype,
+        req,
+        res,
+        headOnly,
+      );
+      return;
+    }
+    if (!file.path?.trim()) {
+      throw new NotFoundException('File not found');
+    }
     await this.pipeRangedFile(file.path, file.mimetype, req, res, headOnly);
   }
 
@@ -213,49 +234,25 @@ export class FileController {
     ) {
       await this.streamMonetization.assertStreamAllowed(file.id, user?.userId);
     }
+    if (
+      !lookup.serveTrailer &&
+      file.r2MainKey &&
+      file.transcodeStatus === FileTranscodeStatus.READY &&
+      file.status === Status.UPLOADED
+    ) {
+      await this.r2Storage.pipeRangedGetObject(
+        file.r2MainKey,
+        file.size,
+        file.mimetype,
+        req,
+        res,
+        headOnly,
+      );
+      return;
+    }
     const { absolutePath, mimetype } =
       this.fileService.resolveMediaDiskPathAndMime(lookup);
     await this.pipeRangedFile(absolutePath, mimetype, req, res, headOnly);
-  }
-
-  /**
-   * Parse the first range in `Range` (RFC 7233). Returns null so caller can fall back
-   * to 200 full body when the header is absent or unusable.
-   */
-  private static parseSingleByteRange(
-    range: string | undefined,
-    fileSize: number,
-  ): { start: number; end: number } | null {
-    if (!range || fileSize <= 0) return null;
-    const r = range.trim();
-    if (!r.toLowerCase().startsWith('bytes=')) return null;
-    const first = r.slice(6).split(',')[0].trim();
-
-    const suffix = /^-(\d+)$/.exec(first);
-    if (suffix) {
-      const len = parseInt(suffix[1], 10);
-      if (!Number.isFinite(len) || len <= 0) return null;
-      const start = Math.max(0, fileSize - len);
-      const end = fileSize - 1;
-      if (start > end) return null;
-      return { start, end };
-    }
-
-    const std = /^(\d+)-(\d*)$/.exec(first);
-    if (!std) return null;
-    const start = parseInt(std[1], 10);
-    let end = std[2] !== '' ? parseInt(std[2], 10) : fileSize - 1;
-    if (
-      Number.isNaN(start) ||
-      Number.isNaN(end) ||
-      start < 0 ||
-      start >= fileSize ||
-      start > end
-    ) {
-      return null;
-    }
-    end = Math.min(end, fileSize - 1);
-    return { start, end };
   }
 
   private async pipeRangedFile(
@@ -285,7 +282,7 @@ export class FileController {
       }
     };
 
-    const parsedRange = FileController.parseSingleByteRange(range, fileSize);
+    const parsedRange = parseSingleByteRange(range, fileSize);
 
     if (parsedRange) {
       const { start, end } = parsedRange;
