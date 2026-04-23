@@ -38,7 +38,6 @@ export class PrismaService
       omit: {
         user: {
           password: true,
-          publicKey: true,
         },
       },
     } as any);

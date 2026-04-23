@@ -50,13 +50,12 @@ model User {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   deletedAt                 DateTime?
-  recipient                 Chat[]                     @relation("chatRecipient")
-  sender                    Chat[]                     @relation("chatSender")
-  deletedBy                 Chat[]                     @relation("chatDeletedBy")
+  sentChats                 Chat[]                     @relation("chatSender")
+  receivedEnvelopes         ChatEnvelope[]             @relation("chatRecipient")
   Room                      Room?                      @relation(fields: [roomId], references: [id])
   roomId                    String?
-  publicKey                 String?
-  userChatEncryptedMessages UserChatEncryptedMessage[]
+  /// Olm per-device identity + prekeys (one row per web/mobile/desktop install).
+  devices                   Device[]
   LongPost                  LongPost[]
   AuthToken                 AuthToken[]
   notifications             Notification[]
@@ -106,6 +105,8 @@ model Post {
   quotedPostId             String?
   quotedPost               Post?        @relation("PostQuotedPost", fields: [quotedPostId], references: [id], onDelete: SetNull)
   postsQuotingThis         Post[]       @relation("PostQuotedPost")
+
+  @@index([quotedPostId])
 }
 
 model LongPost {
@@ -157,38 +158,53 @@ model File {
   r2ManifestKey         String?
 }
 
+/// One logical chat message in a room. Per-recipient ciphertexts live on
+/// `ChatEnvelope` (one row per recipient device in an Olm/Double-Ratchet
+/// session). The plaintext body is NEVER stored server-side.
 model Chat {
-  id                    String                     @id @default(uuid())
-  to                    User                       @relation("chatRecipient", fields: [toUserId], references: [id])
-  from                  User                       @relation("chatSender", fields: [fromUserId], references: [id])
-  /// AES-GCM bundle (base64): iv + ciphertext + tag; used with hybrid E2EE. Null = legacy RSA-only body in user rows.
-  encryptedPayload      String?                    @db.Text
-  text                  String?
-  media                 String?
-  mediaType             String[]
-  read                  Boolean                    @default(false)
-  deletedBy             User?                      @relation("chatDeletedBy", fields: [deletedByUserId], references: [id])
-  deletedByUserId       String?
-  deletedByMe           Boolean                    @default(false)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
-  deletedAt             DateTime?
-  toUserId              String
-  fromUserId            String
-  status                Status                     @default(PENDING)
-  room                  Room?                      @relation(fields: [roomId], references: [id])
-  roomId                String?
-  userEncryptedMessages UserChatEncryptedMessage[]
+  id             String         @id @default(uuid())
+  room           Room           @relation(fields: [roomId], references: [id])
+  roomId         String
+  /// User who authored the message (useful for inbox previews / authz).
+  sender         User           @relation("chatSender", fields: [senderUserId], references: [id])
+  senderUserId   String
+  /// Device that authored the message (used by recipients to look up the
+  /// right Olm session on their side).
+  senderDevice   Device         @relation("chatSenderDevice", fields: [senderDeviceId], references: [id])
+  senderDeviceId String
+  createdAt      DateTime       @default(now())
+  deletedAt      DateTime?
+  envelopes      ChatEnvelope[]
+
+  // History pagination filters by `roomId` and orders by `createdAt desc`.
+  @@index([roomId, createdAt])
+  @@index([senderDeviceId])
 }
 
-model UserChatEncryptedMessage {
-  id               String   @id @default(uuid())
-  chat             Chat     @relation(fields: [chatId], references: [id])
-  chatId           String
-  user             User     @relation(fields: [userId], references: [id])
-  userId           String
-  encryptedMessage String
-  createdAt        DateTime @default(now())
+/// Per-recipient-device wrapped ciphertext for a `Chat`. Messages fan out
+/// to every active device of every room participant (including the sender's
+/// other devices so their own history replicates across devices).
+model ChatEnvelope {
+  id                String   @id @default(uuid())
+  chat              Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId            String
+  recipient         User     @relation("chatRecipient", fields: [recipientUserId], references: [id])
+  recipientUserId   String
+  recipientDevice   Device   @relation("chatRecipientDevice", fields: [recipientDeviceId], references: [id], onDelete: Cascade)
+  recipientDeviceId String
+  /// Olm PreKeyMessage (type=0) or Message (type=1), base64.
+  ciphertext        String   @db.Text
+  /// 0 = PreKeyMessage (session bootstrap), 1 = Message (ratchet continuation).
+  messageType       Int      @default(1)
+  /// Unread bookkeeping for the recipient device.
+  read              Boolean  @default(false)
+  /// Set when the recipient device has acked delivery.
+  deliveredAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  @@unique([chatId, recipientDeviceId])
+  @@index([recipientDeviceId, read])
+  @@index([recipientUserId, createdAt])
 }
 
 model Room {
@@ -198,6 +214,73 @@ model Room {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   roomType     RoomType @default(PRIVATE)
+}
+
+/// An Olm-capable endpoint (one web tab group, one mobile install, etc.).
+/// Identity keys live on the device; the server only stores public material.
+model Device {
+  id                      String              @id @default(uuid())
+  user                    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                  String
+  /// Human-readable label the user sees in a security/devices screen.
+  label                   String
+  /// Curve25519 device identity key (base64, 32B raw) — used as peer
+  /// identifier when establishing Olm sessions.
+  identityKeyCurve25519   String
+  /// Ed25519 device identity key (base64, 32B raw) — signs OTKs and is the
+  /// device fingerprint shown for out-of-band verification.
+  identityKeyEd25519      String               @unique
+  oneTimeKeys             DeviceOneTimeKey[]
+  fallbackKeys            DeviceFallbackKey[]
+  sentChats               Chat[]               @relation("chatSenderDevice")
+  receivedEnvelopes       ChatEnvelope[]       @relation("chatRecipientDevice")
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  lastSeenAt              DateTime             @default(now())
+  /// Set when the user (or admin) revokes the device. Revoked devices stop
+  /// receiving new envelopes but previously-delivered messages remain readable
+  /// on-disk by that device until it logs out.
+  revokedAt               DateTime?
+
+  @@index([userId, revokedAt])
+}
+
+/// One-time prekeys uploaded by a `Device`, consumed at most once to bootstrap
+/// new Olm sessions from peers. Clients replenish this pool in the background.
+model DeviceOneTimeKey {
+  id         String    @id @default(uuid())
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  /// Olm-assigned key id, unique within a device (e.g. "AAAAAQ").
+  keyId      String
+  /// Curve25519 public key (base64, 32B raw).
+  publicKey  String
+  /// Ed25519 signature over `publicKey` by the device's identity key.
+  signature  String
+  /// Null while available; set atomically when claimed by a peer.
+  claimedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([deviceId, keyId])
+  @@index([deviceId, claimedAt])
+}
+
+/// Long-lived "fallback" prekey used when a device's one-time-key pool is
+/// empty. Exactly one row per device should have `retiredAt` null at a time;
+/// old fallback keys are retained (not deleted) so in-flight PreKeyMessages
+/// can still establish a session.
+model DeviceFallbackKey {
+  id         String    @id @default(uuid())
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  keyId      String
+  publicKey  String
+  signature  String
+  createdAt  DateTime  @default(now())
+  retiredAt  DateTime?
+
+  @@unique([deviceId, keyId])
+  @@index([deviceId, retiredAt])
 }
 
 enum Status {
@@ -244,6 +327,8 @@ model Notification {
   postId          String?
   commentId       String?
   mentionedUserId String?
+  /// Room reference for NotificationType.MESSAGE so push deep links can jump straight to the thread.
+  roomId          String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -265,6 +350,7 @@ enum NotificationType {
   POST_LIKED
   COMMENT_ADDED
   USER_MENTIONED
+  MESSAGE
 }
 
 enum VideoCategory {

@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   DiskHealthIndicator,
   HealthCheck,
@@ -10,6 +11,7 @@ import {
 import { Public } from 'src/auth/auth.guard';
 import { api_base_url, ui_base_url } from '../utils';
 
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(

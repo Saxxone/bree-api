@@ -24,6 +24,10 @@ export interface JwtPayload {
 export const IS_PUBLIC_KEY = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
+/** Body-based auth; stale Bearer on these POSTs must not run in-guard refresh. */
+const UNAUTHENTICATED_POST_AUTH_PATH =
+  /^\/api\/auth\/(login\/google|signup\/google|login|logout|refresh)$/;
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
@@ -45,12 +49,14 @@ export class AuthGuard implements CanActivate {
         this.authService = this.moduleRef.get(AuthService, { strict: false });
       }
 
-      const isPublic = this.reflector.getAllAndOverride<boolean>(
+      const request = context.switchToHttp().getRequest<Request>();
+      const isPublicFromMetadata = this.reflector.getAllAndOverride<boolean>(
         IS_PUBLIC_KEY,
         [context.getHandler(), context.getClass()],
       );
-
-      const request = context.switchToHttp().getRequest();
+      // Reflector can miss metadata in some builds; never block known unauthenticated auth routes.
+      const isPublic =
+        !!isPublicFromMetadata || this.isUnauthenticatedPostAuthPath(request);
       const token =
         this.extractTokenFromHeader(request) ??
         this.extractaTokenFromQuery(request);
@@ -110,5 +116,19 @@ export class AuthGuard implements CanActivate {
     } else {
       return undefined;
     }
+  }
+
+  /**
+   * POSTs that use password / body tokens only, not a Bearer access token.
+   * If a client still sends a stale Authorization header, the guard must not
+   * run the "protected" refresh-in-guard path for this path.
+   */
+  private isUnauthenticatedPostAuthPath(request: Request): boolean {
+    if (request.method !== 'POST') {
+      return false;
+    }
+    const raw = (request as Request & { path?: string }).path ?? request.url;
+    const path = (raw.split('?')[0] ?? '').replace(/\/+$/, '') || '/';
+    return UNAUTHENTICATED_POST_AUTH_PATH.test(path);
   }
 }

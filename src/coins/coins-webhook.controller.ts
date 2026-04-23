@@ -5,11 +5,13 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from 'src/auth/auth.guard';
 import { CoinPurchaseService } from './coin-purchase.service';
 
+@SkipThrottle()
 @Controller('coins/stripe')
 export class CoinsStripeWebhookController {
   constructor(private readonly purchase: CoinPurchaseService) {}

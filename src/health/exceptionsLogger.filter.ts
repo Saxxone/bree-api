@@ -43,11 +43,22 @@ export class ExceptionsLoggerFilter implements ExceptionFilter {
     response.status(resolved.status).json(payload);
   }
 
+  private static readonly sensitiveBodyKeys = new Set([
+    'password',
+    'token',
+    'access_token',
+    'refresh_token',
+    'id_token',
+    'e2eePrivateKeyBackupCiphertext',
+  ]);
+
   private sanitizeRequestBody(body: unknown): unknown {
     if (body && typeof body === 'object') {
       const sanitizedBody = { ...(body as Record<string, unknown>) };
-      if ('password' in sanitizedBody) {
-        sanitizedBody.password = '***REDACTED***';
+      for (const k of Object.keys(sanitizedBody)) {
+        if (ExceptionsLoggerFilter.sensitiveBodyKeys.has(k)) {
+          sanitizedBody[k] = '***REDACTED***';
+        }
       }
       return sanitizedBody;
     }

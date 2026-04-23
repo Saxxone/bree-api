@@ -28,6 +28,10 @@ export class CreateNotificationDto {
   mentionedUserId?: string;
 
   @IsOptional()
+  @IsString()
+  roomId?: string;
+
+  @IsOptional()
   trigger?: any;
 }
 

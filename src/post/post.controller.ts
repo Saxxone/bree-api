@@ -91,7 +91,10 @@ export class PostController {
     @Request() req: any,
   ): Promise<PostModel> {
     return await this.postService.updatePost({
-      where: { id: String(id) },
+      where: {
+        id: String(id),
+        author: { email: req.user.sub },
+      },
       data: { published: true },
       email: req.user.sub,
     });
@@ -378,7 +381,13 @@ export class PostController {
   }
 
   @Delete(':id')
-  async deletePost(@Param('id') id: string): Promise<PostModel> {
-    return await this.postService.deletePost({ id: String(id) });
+  async deletePost(
+    @Param('id') id: string,
+    @Request() req: { user: { sub: string } },
+  ): Promise<PostModel> {
+    return await this.postService.deletePost({
+      id: String(id),
+      userEmail: req.user.sub,
+    });
   }
 }

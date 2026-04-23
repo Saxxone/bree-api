@@ -5,11 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Request,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
-import { AuthGuard, Public } from './auth.guard';
+import { Public } from './auth.guard';
+import type { JwtPayload } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SignInDto } from './dto/sign-in.dto';
 
@@ -64,9 +65,10 @@ export class AuthController {
     );
   }
 
-  @UseGuards(AuthGuard)
   @Get('profile')
-  async getProfile(@Body('id') id: string) {
-    return await this.userService.findUser(id);
+  async getProfile(
+    @Request() req: { user: JwtPayload },
+  ) {
+    return await this.userService.findUser(req.user.userId);
   }
 }

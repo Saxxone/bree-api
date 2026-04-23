@@ -710,11 +710,19 @@ export class PostService {
         }
       }
 
+      const author = await this.prisma.user.findUniqueOrThrow({
+        where: { email },
+        select: { id: true },
+      });
+
       const fileIds = data.media ?? [];
       const clone = data.longPost?.content;
 
       if (fileIds.length > 0 && data.type !== PostType.LONG) {
-        const res = await this.fileService.getFilesUrls(data.media as any);
+        const res = await this.fileService.getFilesUrls(
+          data.media as string[],
+          author.id,
+        );
         data.media = res.map((file) => file.url);
         data.mediaTypes = res.map((file) => file.type);
       }
@@ -722,7 +730,10 @@ export class PostService {
         try {
           const contents = await Promise.all(
             data.longPost.content.map(async (c) => {
-              const res = await this.fileService.getFilesUrls(c.media);
+              const res = await this.fileService.getFilesUrls(
+                c.media,
+                author.id,
+              );
               return res[0];
             }),
           );
@@ -773,13 +784,13 @@ export class PostService {
 
       //Mark uploaded for short posts
       if (fileIds.length > 0)
-        await this.fileService.markFileAsUploaded(fileIds);
+        await this.fileService.markFileAsUploaded(fileIds, author.id);
 
       //Mark uploaded for long posts
       if (data.type === PostType.LONG && clone && clone.length > 0) {
         await Promise.all(
           clone.map(async (c) => {
-            await this.fileService.markFileAsUploaded(c.media);
+            await this.fileService.markFileAsUploaded(c.media, author.id);
           }),
         );
       }
@@ -798,7 +809,7 @@ export class PostService {
       }
 
       if (post.parentId) {
-        await this.incrementParentPostCommentCount(post.parentId, email);
+        await this.incrementParentPostCommentCount(post.parentId);
       }
 
       if (published) {
@@ -1004,14 +1015,12 @@ export class PostService {
 
   async incrementParentPostCommentCount(
     postId: string,
-    email: string,
-  ): Promise<Post> {
+  ): Promise<void> {
     const parentPost = await this.findParentPost(postId);
 
-    return this.updatePost({
+    await this.prisma.post.update({
       where: { id: postId },
       data: { commentCount: parentPost.commentCount + 1 },
-      email,
     });
   }
 
@@ -1652,9 +1661,20 @@ export class PostService {
     );
   }
 
-  async deletePost(where: Prisma.PostWhereUniqueInput): Promise<Post> {
-    return this.prisma.post.delete({
-      where,
+  async deletePost(params: { id: string; userEmail: string }): Promise<Post> {
+    const me = await this.prisma.user.findUnique({
+      where: { email: params.userEmail },
+      select: { id: true },
     });
+    if (!me) {
+      throw new NotFoundException('User not found');
+    }
+    const post = await this.prisma.post.findFirst({
+      where: { id: params.id, authorId: me.id, deletedAt: null },
+    });
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+    return this.prisma.post.delete({ where: { id: post.id } });
   }
 }

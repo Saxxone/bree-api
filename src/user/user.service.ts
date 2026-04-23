@@ -13,36 +13,35 @@ export class UserService {
     usernameOrEmail: string,
     options?: {
       withPassword?: boolean;
-      withPublicKey?: boolean;
     },
   ): Promise<User | null> {
     const searchTerm = usernameOrEmail.startsWith('@')
       ? usernameOrEmail.substring(1)
       : usernameOrEmail;
 
-    const user = await this.prisma.user.findFirst({
-      ...(options?.withPassword && {
-        select: {
-          password: options?.withPassword,
-          id: true,
-          email: true,
-          username: true,
-          img: true,
-          publicKey: true,
-          bio: true,
-          verified: true,
-          role: true,
-        },
-      }),
+    const where = {
+      OR: [
+        { username: searchTerm },
+        { email: usernameOrEmail },
+        { id: usernameOrEmail },
+      ],
+    } satisfies Prisma.UserWhereInput;
 
-      where: {
-        OR: [
-          { username: searchTerm },
-          { email: usernameOrEmail },
-          { id: usernameOrEmail },
-        ],
-      },
-    });
+    const user = options?.withPassword
+      ? await this.prisma.user.findFirst({
+          select: {
+            password: true,
+            id: true,
+            email: true,
+            username: true,
+            img: true,
+            bio: true,
+            verified: true,
+            role: true,
+          },
+          where,
+        })
+      : await this.prisma.user.findFirst({ where });
 
     if (!user) throw new NotFoundException('User not found');
     return user as User;
@@ -57,7 +56,6 @@ export class UserService {
       orderBy?: Prisma.UserOrderByWithRelationInput;
     },
     email: string,
-    with_pk?: boolean,
   ): Promise<Partial<User>[]> {
     const { skip, take, cursor, where, orderBy } = params;
     return this.prisma.user.findMany({
@@ -73,13 +71,12 @@ export class UserService {
       orderBy,
       select: {
         id: true,
+        name: true,
         email: true,
         username: true,
         img: true,
         bio: true,
         verified: true,
-
-        ...(with_pk && { publicKey: true }),
       },
     });
   }
@@ -111,10 +108,11 @@ export class UserService {
     data: UpdateUserDto;
   }): Promise<User> {
     const { where, data } = params;
-    return this.prisma.user.update({
-      data,
+    const updated = await this.prisma.user.update({
+      data: data as Prisma.UserUpdateInput,
       where,
     });
+    return updated as User;
   }
 
   async deleteUser(where: Prisma.UserWhereUniqueInput): Promise<User> {

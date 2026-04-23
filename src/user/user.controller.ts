@@ -1,9 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   Post,
-  Body,
   Put,
   Query,
   Request,
@@ -35,7 +35,6 @@ export class UserController {
   async getFilteredUsers(
     @Query('q') search_string: string,
     @Request() req: any,
-    @Query('with_pk') with_pk?: boolean,
     @Query('skip') skip?: number,
     @Query('take') take?: number,
   ): Promise<Partial<UserModel>[]> {
@@ -61,7 +60,6 @@ export class UserController {
         },
       },
       req.user.sub,
-      with_pk,
     );
   }
 
@@ -80,18 +78,10 @@ export class UserController {
           createdAt: 'desc',
         },
         where: {
-          OR: [
-            // {
-            //   name: { search: search_string },
-            // },
-            // {
-            //   username: { search: search_string },
-            // },
-          ],
+          OR: [],
         },
       },
       req.user.sub,
-      false,
     );
   }
 

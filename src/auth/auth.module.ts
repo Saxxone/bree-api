@@ -19,6 +19,18 @@ import { AuthService, jwtConstants } from './auth.service';
             'JWT_SECRET is not defined. Please set it in your environment variables.',
           );
         }
+        // Refresh tokens are signed/verified with JWT_REFRESH_SECRET inside
+        // AuthService. Fail fast at boot if it is missing rather than letting
+        // refresh JWTs be signed with the empty-string default, which would
+        // make every refresh attempt either trivially forgeable or invalid.
+        const refreshSecret =
+          configService.get<string>('JWT_REFRESH_SECRET') ||
+          jwtConstants.refreshSecret;
+        if (!refreshSecret) {
+          throw new Error(
+            'JWT_REFRESH_SECRET is not defined. Please set it in your environment variables.',
+          );
+        }
         return {
           secret,
           signOptions: { expiresIn: '7d' },

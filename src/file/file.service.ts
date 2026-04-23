@@ -251,12 +251,14 @@ export class FileService {
 
   async getFilesUrls(
     fileIds: string[] | Prisma.PostCreatemediaInput[],
+    ownerUserId: string,
   ): Promise<{ url: string; type: string }[]> {
     return await Promise.all(
       fileIds.map(async (fileId) => {
-        const file = await this.prisma.file.findUnique({
+        const file = await this.prisma.file.findFirst({
           where: {
             id: fileId,
+            ownerId: ownerUserId,
             status: { in: [Status.PENDING, Status.UPLOADED] },
           },
         });
@@ -270,9 +272,15 @@ export class FileService {
     );
   }
 
-  async markFileAsUploaded(fileIds: string[]) {
+  async markFileAsUploaded(fileIds: string[], ownerUserId: string) {
     return Promise.all(
       fileIds.map(async (fileId) => {
+        const allowed = await this.prisma.file.findFirst({
+          where: { id: fileId, ownerId: ownerUserId },
+        });
+        if (!allowed) {
+          throw new NotFoundException('File not found');
+        }
         const file = await this.prisma.file.update({
           where: { id: fileId },
           data: { status: Status.UPLOADED },

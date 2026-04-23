@@ -18,6 +18,7 @@ import { CreateFedUserDto } from 'src/user/dto/create-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtPayload } from './auth.guard';
 import { Request } from 'express';
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 /** JWT signing secrets from env (also imported by AuthModule for JwtModule registration). */
 export const jwtConstants = {
@@ -26,6 +27,11 @@ export const jwtConstants = {
 };
 
 const EXPIRY = '200d';
+
+const googleOauthPublicKeys = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/oauth2/v3/certs'),
+);
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -117,57 +123,123 @@ export class AuthService {
     };
   }
 
+  /**
+   * Verifies a Google **ID token** (not an access token) via Google JWKS.
+   */
+  private async verifyGoogleIdToken(
+    idToken: string,
+  ): Promise<JWTPayload & { email?: string; name?: string; picture?: string }> {
+    const clientId = process.env.GOOGLE_AUTH_CLIENT_ID;
+    if (!clientId) {
+      throw new UnauthorizedException();
+    }
+    try {
+      const { payload } = await jwtVerify(idToken, googleOauthPublicKeys, {
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
+        audience: clientId,
+      });
+      return payload as JWTPayload & {
+        email?: string;
+        name?: string;
+        picture?: string;
+      };
+    } catch {
+      throw new UnauthorizedException();
+    }
+  }
+
+  private googlePayloadToUserShape(
+    p: JWTPayload & { email?: string; name?: string; picture?: string },
+  ): GoogleAuthUser {
+    return {
+      iss: (p.iss as string) ?? '',
+      azp: (p.azp as string) ?? '',
+      aud: (p.aud as string) ?? '',
+      sub: (p.sub as string) ?? '',
+      email: p.email as string,
+      email_verified: Boolean(p['email_verified']),
+      nbf: Number(p['nbf']) || 0,
+      name: (p.name as string) ?? '',
+      picture: (p.picture as string) ?? '',
+      given_name: (p['given_name'] as string) ?? '',
+      family_name: (p['family_name'] as string) ?? '',
+      iat: Number(p.iat) || 0,
+      exp: Number(p.exp) || 0,
+      jti: (p.jti as string) ?? '',
+    };
+  }
+
+  /**
+   * Validates a session **access** JWT present in `AuthToken` (same as HTTP `AuthGuard`).
+   * Not used for refresh-token-as–Bearer. Used by Socket.IO.
+   */
+  async validateAccessTokenString(
+    token: string | undefined | null,
+  ): Promise<JwtPayload | null> {
+    if (!token || token === 'null' || token === 'undefined') {
+      return null;
+    }
+    try {
+      const payload = (await this.jwtService.verifyAsync(token, {
+        secret: jwtConstants.secret,
+      })) as JwtPayload;
+      const row = await this.prisma.authToken.findUnique({ where: { token } });
+      if (!row || row.userId !== payload.userId) {
+        return null;
+      }
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
   async signInGoogle(token: string): Promise<Partial<AuthUser>> {
-    const payload: GoogleAuthUser = await this.jwtService.decode(token);
+    const p = await this.verifyGoogleIdToken(token);
+    if (!p.email) {
+      throw new UnauthorizedException();
+    }
+    const payload = this.googlePayloadToUserShape(p);
 
     const user = await this.userService.findUser(payload.email, {
       withPassword: true,
     });
 
-    const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
     const default_img = process.env.DEFAULT_PROFILE_IMG;
 
     if (!user) {
       throw new UnauthorizedException();
     }
 
-    if (client_id !== payload.aud) {
-      throw new UnauthorizedException();
-    }
-
     if (user.img === default_img) {
-      return await this.updateUserProfile(user, payload, default_img);
-    } else {
-      const fullUser = await this.prisma.user.findUniqueOrThrow({
-        where: { id: user.id },
-      });
-      const tokens = await this.generateTokens(fullUser);
-      if (fullUser.password) {
-        delete (fullUser as { password?: string }).password;
-      }
-      return { ...fullUser, ...tokens };
+      return await this.updateUserProfile(user, payload, default_img!);
     }
+    const fullUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    const tokens = await this.generateTokens(fullUser);
+    if (fullUser.password) {
+      delete (fullUser as { password?: string }).password;
+    }
+    return { ...fullUser, ...tokens };
   }
 
   async signUpGoogle(token: string): Promise<Partial<AuthUser>> {
-    const payload: GoogleAuthUser = await this.jwtService.decode(token);
+    const p = await this.verifyGoogleIdToken(token);
+    if (!p.email) {
+      throw new UnauthorizedException();
+    }
+    const payload = this.googlePayloadToUserShape(p);
 
     let img_url = process.env.DEFAULT_PROFILE_IMG;
 
-    const user = await this.prisma.user.findFirst({
+    const existing = await this.prisma.user.findFirst({
       where: {
         email: payload.email,
       },
     });
 
-    const client_id = process.env.GOOGLE_AUTH_CLIENT_ID;
-
-    if (user) {
+    if (existing) {
       throw new NotAcceptableException();
-    }
-
-    if (client_id !== payload.aud) {
-      throw new UnauthorizedException();
     }
 
     try {
@@ -182,7 +254,7 @@ export class AuthService {
       name: payload.name,
       username: payload.email.split('@')[0],
       email: payload.email,
-      img: img_url,
+      img: img_url!,
     };
 
     const new_user = await this.userService.createFedUser(u);
@@ -297,70 +369,71 @@ export class AuthService {
 
       request['user'] = payload as JwtPayload;
     } catch {
-      if (!is_public) {
-        try {
-          const refresh_token_payload: JwtPayload =
-            await this.jwtService.verifyAsync(token, {
-              secret: jwtConstants.refreshSecret,
-            });
-
-          const refreshToken = await this.prisma.authToken.findUnique({
-            where: {
-              userId_isRefreshToken: {
-                userId: refresh_token_payload.userId,
-                isRefreshToken: true,
-              },
-            },
+      // Public routes: ignore invalid/stale Authorization (e.g. refresh POST with old Bearer).
+      if (is_public) {
+        return;
+      }
+      try {
+        const refresh_token_payload: JwtPayload =
+          await this.jwtService.verifyAsync(token, {
+            secret: jwtConstants.refreshSecret,
           });
 
-          if (!refreshToken || refreshToken.token !== token) {
-            throw new UnauthorizedException('Invalid refresh token.');
-          }
-
-          const dbUser = await this.prisma.user.findUniqueOrThrow({
-            where: { id: refresh_token_payload.userId },
-          });
-          const new_access_token = await this.signToken(dbUser);
-
-          const access_token_expires_at = new Date(
-            Date.now() + 200 * 60 * 1000,
-          );
-          await this.prisma.authToken.upsert({
-            where: {
-              userId_isRefreshToken: {
-                userId: refresh_token_payload.userId,
-                isRefreshToken: false,
-              },
-            },
-            create: {
-              token: new_access_token,
+        const refreshToken = await this.prisma.authToken.findUnique({
+          where: {
+            userId_isRefreshToken: {
               userId: refresh_token_payload.userId,
-              expiresAt: access_token_expires_at,
+              isRefreshToken: true,
+            },
+          },
+        });
+
+        if (!refreshToken || refreshToken.token !== token) {
+          throw new UnauthorizedException('Invalid refresh token.');
+        }
+
+        const dbUser = await this.prisma.user.findUniqueOrThrow({
+          where: { id: refresh_token_payload.userId },
+        });
+        const new_access_token = await this.signToken(dbUser);
+
+        const access_token_expires_at = this.expiresAtFromJwt(
+          new_access_token,
+          false,
+        );
+        await this.prisma.authToken.upsert({
+          where: {
+            userId_isRefreshToken: {
+              userId: refresh_token_payload.userId,
               isRefreshToken: false,
             },
-            update: {
-              token: new_access_token,
-              expiresAt: access_token_expires_at,
-            },
-          });
+          },
+          create: {
+            token: new_access_token,
+            userId: refresh_token_payload.userId,
+            expiresAt: access_token_expires_at,
+            isRefreshToken: false,
+          },
+          update: {
+            token: new_access_token,
+            expiresAt: access_token_expires_at,
+          },
+        });
 
-          request['user'] = {
-            sub: dbUser.email,
-            username: dbUser.username,
-            userId: dbUser.id,
-            role: dbUser.role,
-          };
-          request.headers.authorization = `Bearer ${new_access_token}`;
-        } catch (inner) {
-          if (inner instanceof UnauthorizedException) {
-            throw inner;
-          }
-          throw new UnauthorizedException(
-            'Invalid or expired session. Please sign in again.',
-          );
+        request['user'] = {
+          sub: dbUser.email,
+          username: dbUser.username,
+          userId: dbUser.id,
+          role: dbUser.role,
+        };
+        request.headers.authorization = `Bearer ${new_access_token}`;
+      } catch (inner) {
+        if (inner instanceof UnauthorizedException) {
+          throw inner;
         }
-      } else {
-        return;
+        throw new UnauthorizedException(
+          'Invalid or expired session. Please sign in again.',
+        );
       }
     }
   }
@@ -403,14 +476,20 @@ export class AuthService {
     });
   }
 
+  /**
+   * Persist a token alongside the JWT's own `exp` claim so the DB row and the
+   * JWT cannot disagree on lifetime. The previous implementation hard-coded
+   * 100 minutes for refresh and 200 minutes for access while the JWTs
+   * themselves were signed with `7d` and `200d` respectively, which caused
+   * `verifyRefreshToken` to reject perfectly valid refresh JWTs after ~100
+   * minutes and silently log mobile users out.
+   */
   private async saveToken(
     userId: string,
     token: string,
     isRefreshToken: boolean,
   ): Promise<void> {
-    const expiresAt = new Date(
-      Date.now() + (isRefreshToken ? 100 : 200) * 60 * 1000,
-    );
+    const expiresAt = this.expiresAtFromJwt(token, isRefreshToken);
 
     await this.prisma.authToken.upsert({
       where: { userId_isRefreshToken: { userId, isRefreshToken } },
@@ -422,6 +501,26 @@ export class AuthService {
         expiresAt,
       },
     });
+  }
+
+  /**
+   * Decodes the JWT (without verifying — we just signed it) and returns its
+   * `exp` as a Date. Falls back to a sensible default that matches the JWT
+   * `signAsync` `expiresIn` if the claim is missing for any reason.
+   */
+  private expiresAtFromJwt(token: string, isRefreshToken: boolean): Date {
+    const decoded = this.jwtService.decode(token) as
+      | { exp?: number }
+      | null
+      | string;
+    if (decoded && typeof decoded === 'object' && typeof decoded.exp === 'number') {
+      return new Date(decoded.exp * 1000);
+    }
+    // Fallback: refresh = 7d, access = 200d (mirrors signing options).
+    const fallbackMs = isRefreshToken
+      ? 7 * 24 * 60 * 60 * 1000
+      : 200 * 24 * 60 * 60 * 1000;
+    return new Date(Date.now() + fallbackMs);
   }
 
   private createImgPath() {

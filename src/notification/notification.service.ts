@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -24,6 +24,7 @@ export class NotificationService {
         postId,
         commentId,
         mentionedUserId,
+        roomId,
       } = createNotificationDto;
 
       const notification = await this.prisma.notification.create({
@@ -36,6 +37,7 @@ export class NotificationService {
           ...(mentionedUserId != null && mentionedUserId !== ''
             ? { mentionedUserId }
             : {}),
+          ...(roomId != null && roomId !== '' ? { roomId } : {}),
         },
       });
 
@@ -48,6 +50,7 @@ export class NotificationService {
         user,
         postId: notification.postId ?? undefined,
         commentId: notification.commentId ?? undefined,
+        roomId: notification.roomId ?? undefined,
         read: notification.read,
       };
 
@@ -64,6 +67,9 @@ export class NotificationService {
         case NotificationType.USER_MENTIONED:
           this.eventEmitter.emit('post.created', ssePayload);
           break;
+        case NotificationType.MESSAGE:
+          this.eventEmitter.emit('message.received', ssePayload);
+          break;
         default:
           break;
       }
@@ -77,6 +83,7 @@ export class NotificationService {
             notificationId: notification.id,
             postId: notification.postId ?? '',
             commentId: notification.commentId ?? '',
+            roomId: notification.roomId ?? '',
             type: notification.type,
           },
         })
@@ -103,31 +110,31 @@ export class NotificationService {
     }
   }
 
-  findOne(id: string) {
-    try {
-      return this.prisma.notification.findUnique({
-        where: {
-          id,
-        },
-      });
-    } catch (error) {
-      console.log(error);
-    }
+  findOneForUser(id: string, userId: string) {
+    return this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
   }
 
-  async update(id: string, updateNotificationDto: UpdateNotificationDto) {
-    try {
-      return await this.prisma.notification.update({
-        where: { id },
-        data: {
-          ...(updateNotificationDto.read !== undefined && {
-            read: updateNotificationDto.read,
-          }),
-        },
-      });
-    } catch (error) {
-      console.log(error);
+  async update(
+    id: string,
+    userId: string,
+    updateNotificationDto: UpdateNotificationDto,
+  ) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Notification not found');
     }
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        ...(updateNotificationDto.read !== undefined && {
+          read: updateNotificationDto.read,
+        }),
+      },
+    });
   }
 
   markAllRead(userId: string) {
@@ -137,15 +144,15 @@ export class NotificationService {
     });
   }
 
-  remove(id: string) {
-    try {
-      return this.prisma.notification.delete({
-        where: {
-          id,
-        },
-      });
-    } catch (error) {
-      console.log(error);
+  async removeForUser(id: string, userId: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Notification not found');
     }
+    return this.prisma.notification.delete({
+      where: { id },
+    });
   }
 }

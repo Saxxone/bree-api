@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
@@ -8,6 +8,7 @@ import { PostModule } from './post/post.module';
 import { AuthModule } from './auth/auth.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from './auth/auth.guard';
 import { LoggingInterceptor } from './app.interceptor';
 import { MulterModule } from '@nestjs/platform-express';
@@ -17,6 +18,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationModule } from './notification/notification.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ChatModule } from './chat/chat.module';
+import { DeviceModule } from './device/device.module';
 import { RoomModule } from './room/room.module';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
@@ -43,8 +45,8 @@ import { CreatorModule } from './creator/creator.module';
     }),
     ThrottlerModule.forRoot([
       {
-        ttl: 6000,
-        limit: 10,
+        ttl: 60_000,
+        limit: 100,
       },
     ]),
     UserModule,
@@ -54,6 +56,7 @@ import { CreatorModule } from './creator/creator.module';
     HealthModule,
     NotificationModule,
     ChatModule,
+    DeviceModule,
     RoomModule,
     CoinsModule,
     AdminModule,
@@ -63,6 +66,10 @@ import { CreatorModule } from './creator/creator.module';
   providers: [
     AppService,
     PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

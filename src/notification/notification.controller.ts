@@ -13,9 +13,8 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
-import { Observable, fromEventPattern, map, merge } from 'rxjs';
+import { Observable, filter, fromEventPattern, map, merge } from 'rxjs';
 import {
-  CreateNotificationDto,
   MessageEvent,
   NotificationObject,
   NotificationTypes,
@@ -45,15 +44,20 @@ export class NotificationController {
 
   @Sse('sse')
   @Header('Content-Type', 'text/event-stream')
-  async sse(): Promise<Observable<MessageEvent>> {
+  async sse(
+    @Request() req: { user: JwtPayload },
+  ): Promise<Observable<MessageEvent>> {
+    const userId = req.user.userId;
     const handleEvent = (type: NotificationTypes) =>
       fromEventPattern<NotificationObject>(
         (handler) => this.eventEmitter.on(type, handler),
         (handler) => this.eventEmitter.off(type, handler),
       ).pipe(
-        map((event) => ({
-          data: event,
-        })),
+        map((event) => ({ data: event })),
+        filter((msg) => {
+          const ev = msg.data as { user?: { id?: string } };
+          return ev?.user?.id === userId;
+        }),
       );
 
     const postCreated$ = handleEvent('post.created');
@@ -61,11 +65,6 @@ export class NotificationController {
     const postLiked$ = handleEvent('post.liked');
 
     return merge(postCreated$, commentAdded$, postLiked$);
-  }
-
-  @Post()
-  create(@Body() createNotificationDto: CreateNotificationDto) {
-    return this.notificationService.create(createNotificationDto);
   }
 
   @Post('push-token')
@@ -97,8 +96,11 @@ export class NotificationController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.notificationService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @Request() req: { user: JwtPayload },
+  ) {
+    return this.notificationService.findOneForUser(id, req.user.userId);
   }
 
   @Patch('read-all')
@@ -109,9 +111,14 @@ export class NotificationController {
   @Patch(':id')
   update(
     @Param('id') id: string,
+    @Request() req: { user: JwtPayload },
     @Body() updateNotificationDto: UpdateNotificationDto,
   ) {
-    return this.notificationService.update(id, updateNotificationDto);
+    return this.notificationService.update(
+      id,
+      req.user.userId,
+      updateNotificationDto,
+    );
   }
 
   @Delete('push-token')
@@ -124,7 +131,10 @@ export class NotificationController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.notificationService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Request() req: { user: JwtPayload },
+  ) {
+    return this.notificationService.removeForUser(id, req.user.userId);
   }
 }

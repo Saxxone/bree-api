@@ -1,9 +1,11 @@
 import { ForbiddenException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Status, File as FileModel } from '@prisma/client';
 import { FileService } from './file.service';
 import { UserService } from '../user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2StorageService } from './r2-storage.service';
 
 function fileStub(
   partial: Pick<FileModel, 'status' | 'ownerId'> & Partial<FileModel>,
@@ -20,6 +22,8 @@ describe('FileService', () => {
         FileService,
         { provide: UserService, useValue: {} },
         { provide: PrismaService, useValue: {} },
+        { provide: R2StorageService, useValue: {} },
+        { provide: getQueueToken('video-transcode'), useValue: { add: jest.fn() } },
       ],
     }).compile();
 
