@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Chat, ChatEnvelope } from '@prisma/client';
+import { Chat, ChatEnvelope, Device } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
 import { RoomService } from 'src/room/room.service';
@@ -43,8 +43,16 @@ export class ChatService {
   async create(
     authedUserId: string,
     dto: CreateChatDto,
-  ): Promise<Chat & { envelopes: ChatEnvelope[] }> {
-    await this.roomService.assertUserIsRoomParticipant(dto.roomId, authedUserId);
+  ): Promise<
+    Chat & {
+      envelopes: ChatEnvelope[];
+      senderDevice: Pick<Device, 'identityKeyCurve25519'>;
+    }
+  > {
+    await this.roomService.assertUserIsRoomParticipant(
+      dto.roomId,
+      authedUserId,
+    );
 
     // `senderDeviceId` must belong to the authenticated user and not be revoked.
     await this.deviceService.assertDeviceOwnedByUser(
@@ -98,7 +106,12 @@ export class ChatService {
             })),
           },
         },
-        include: { envelopes: true },
+        include: {
+          envelopes: true,
+          senderDevice: {
+            select: { identityKeyCurve25519: true },
+          },
+        },
       });
       await tx.room.update({
         where: { id: dto.roomId },
@@ -107,7 +120,9 @@ export class ChatService {
       return chat;
     });
 
-    const otherUserIds = [...participantIds].filter((id) => id !== authedUserId);
+    const otherUserIds = [...participantIds].filter(
+      (id) => id !== authedUserId,
+    );
     const payload: ChatCreatedEventPayload = {
       chat: created,
       fromUserId: authedUserId,
@@ -135,7 +150,8 @@ export class ChatService {
     for (const p of args.participants) {
       const ids = new Set<string>();
       for (const d of p.devices) {
-        if (p.id === args.senderUserId && d.id === args.senderDeviceId) continue;
+        if (p.id === args.senderUserId && d.id === args.senderDeviceId)
+          continue;
         ids.add(d.id);
       }
       if (ids.size > 0) expected.set(p.id, ids);

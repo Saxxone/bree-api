@@ -96,10 +96,7 @@ export class NotificationController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @Request() req: { user: JwtPayload },
-  ) {
+  findOne(@Param('id') id: string, @Request() req: { user: JwtPayload }) {
     return this.notificationService.findOneForUser(id, req.user.userId);
   }
 
@@ -131,10 +128,7 @@ export class NotificationController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @Request() req: { user: JwtPayload },
-  ) {
+  remove(@Param('id') id: string, @Request() req: { user: JwtPayload }) {
     return this.notificationService.removeForUser(id, req.user.userId);
   }
 }

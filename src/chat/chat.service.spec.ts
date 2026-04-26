@@ -69,7 +69,9 @@ describe('ChatService.create fanout', () => {
         }),
       ),
     };
-    deviceService = { assertDeviceOwnedByUser: jest.fn().mockResolvedValue(true) };
+    deviceService = {
+      assertDeviceOwnedByUser: jest.fn().mockResolvedValue(true),
+    };
     roomService = {
       assertUserIsRoomParticipant: jest.fn().mockResolvedValue(undefined),
     };

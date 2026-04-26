@@ -17,15 +17,44 @@ const PARTICIPANT_SELECT = {
   verified: true,
   name: true,
   devices: {
-    where: { revokedAt: null },
+    // Include historical devices too: clients need the sender device's
+    // Curve25519 identity to decrypt older envelopes even after that device
+    // has later been revoked or replaced.
     select: {
       id: true,
       label: true,
       identityKeyCurve25519: true,
       identityKeyEd25519: true,
+      revokedAt: true,
     },
   },
 } as const;
+
+function latestChatInclude(callerDeviceId?: string) {
+  const envelopesFilter = callerDeviceId
+    ? { where: { recipientDeviceId: callerDeviceId } }
+    : { where: { id: '__never__' } };
+  return {
+    take: 1,
+    orderBy: { createdAt: 'desc' as const },
+    include: {
+      envelopes: envelopesFilter,
+      senderDevice: {
+        select: { identityKeyCurve25519: true },
+      },
+    },
+  };
+}
+
+function mapChatWithSenderIdentity<T extends { chats?: Array<any> }>(room: T): T {
+  return {
+    ...room,
+    chats: (room.chats ?? []).map(({ senderDevice, ...chat }) => ({
+      ...chat,
+      senderIdentityKeyCurve25519: senderDevice?.identityKeyCurve25519,
+    })),
+  };
+}
 
 @Injectable()
 export class RoomService {
@@ -58,10 +87,15 @@ export class RoomService {
     return room;
   }
 
-  findAllWithParticipant(userId: string, skip: number = 0, take: number = 50) {
+  async findAllWithParticipant(
+    userId: string,
+    skip: number = 0,
+    take: number = 50,
+    callerDeviceId?: string,
+  ) {
     const s = Math.max(0, skip);
     const t = Math.min(Math.max(1, take), 100);
-    return this.prisma.room.findMany({
+    const rooms = await this.prisma.room.findMany({
       where: {
         participants: {
           some: {
@@ -74,12 +108,10 @@ export class RoomService {
       orderBy: { updatedAt: 'desc' },
       include: {
         participants: { select: PARTICIPANT_SELECT },
-        chats: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-        },
+        chats: latestChatInclude(callerDeviceId),
       },
     });
+    return rooms.map((room) => mapChatWithSenderIdentity(room));
   }
 
   /**
@@ -100,27 +132,44 @@ export class RoomService {
     const envelopesFilter = callerDeviceId
       ? { where: { recipientDeviceId: callerDeviceId } }
       : { where: { id: '__never__' } };
+    const include = {
+      envelopes: envelopesFilter,
+      senderDevice: {
+        select: { identityKeyCurve25519: true },
+      },
+    } as const;
     if (cursor) {
-      return this.prisma.chat.findMany({
+      return this.prisma.chat
+        .findMany({
         where: { roomId },
         take,
         skip: 1,
         cursor: { id: cursor },
         orderBy: { createdAt: 'desc' },
-        include: {
-          envelopes: envelopesFilter,
-        },
-      });
+        include,
+      })
+        .then((rows) =>
+          rows.map(({ senderDevice, ...chat }) => ({
+            ...chat,
+            senderIdentityKeyCurve25519:
+              senderDevice.identityKeyCurve25519,
+          })),
+        );
     }
-    return this.prisma.chat.findMany({
+    return this.prisma.chat
+      .findMany({
       where: { roomId },
       orderBy: { createdAt: 'desc' },
       skip: skipRaw,
       take,
-      include: {
-        envelopes: envelopesFilter,
-      },
-    });
+      include,
+    })
+      .then((rows) =>
+        rows.map(({ senderDevice, ...chat }) => ({
+          ...chat,
+          senderIdentityKeyCurve25519: senderDevice.identityKeyCurve25519,
+        })),
+      );
   }
 
   async joinRoom(roomId: string, userId: string): Promise<boolean> {
@@ -164,25 +213,23 @@ export class RoomService {
     }
   }
 
-  async findOne(id: string): Promise<Room | null> {
+  async findOne(id: string, callerDeviceId?: string): Promise<Room | null> {
     const room = await this.prisma.room.findUnique({
       where: {
         id,
       },
       include: {
         participants: { select: PARTICIPANT_SELECT },
-        chats: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-        },
+        chats: latestChatInclude(callerDeviceId),
       },
     });
-    return room;
+    return room ? mapChatWithSenderIdentity(room) : null;
   }
 
   async findRoomByParticipantsOrCreate(
     user1Id: string,
     user2Id: string,
+    callerDeviceId?: string,
   ): Promise<Room> {
     if (user1Id === user2Id) {
       throw new ForbiddenException('Cannot create a DM with yourself');
@@ -211,23 +258,20 @@ export class RoomService {
         },
         include: {
           participants: { select: PARTICIPANT_SELECT },
-          chats: {
-            take: 1,
-            orderBy: { createdAt: 'desc' },
-          },
+          chats: latestChatInclude(callerDeviceId),
         },
       });
 
     const existingRoom = await lookup();
     if (existingRoom) {
-      return existingRoom;
+      return mapChatWithSenderIdentity(existingRoom);
     }
 
     try {
       return await this.create(user1, user2);
     } catch (err) {
       const raced = await lookup();
-      if (raced) return raced;
+      if (raced) return mapChatWithSenderIdentity(raced);
       throw err;
     }
   }

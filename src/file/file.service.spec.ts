@@ -23,7 +23,10 @@ describe('FileService', () => {
         { provide: UserService, useValue: {} },
         { provide: PrismaService, useValue: {} },
         { provide: R2StorageService, useValue: {} },
-        { provide: getQueueToken('video-transcode'), useValue: { add: jest.fn() } },
+        {
+          provide: getQueueToken('video-transcode'),
+          useValue: { add: jest.fn() },
+        },
       ],
     }).compile();
 

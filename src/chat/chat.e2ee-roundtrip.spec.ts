@@ -107,8 +107,9 @@ describe('Chat E2EE round-trip (claimKeys + create)', () => {
         findMany: jest.fn(async (args: { where?: { userId?: string } }) =>
           devices.filter((d) => d.userId === args.where?.userId),
         ),
-        findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-          devices.find((d) => d.id === where.id) ?? null,
+        findUnique: jest.fn(
+          async ({ where }: { where: { id: string } }) =>
+            devices.find((d) => d.id === where.id) ?? null,
         ),
       },
       deviceFallbackKey: { findFirst: jest.fn().mockResolvedValue(null) },

@@ -74,12 +74,16 @@ export class RegisterDeviceDto {
 }
 
 export class UploadOneTimeKeysDto {
+  /**
+   * Optional for fallback-only rotation. The service layer enforces that at
+   * least one of `oneTimeKeys` or `fallbackKey` is provided.
+   */
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => OlmSignedKeyDto)
-  oneTimeKeys!: OlmSignedKeyDto[];
+  oneTimeKeys?: OlmSignedKeyDto[];
 
   /** Optional: rotate the fallback key in the same request. */
   @IsOptional()

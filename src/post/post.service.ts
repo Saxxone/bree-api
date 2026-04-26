@@ -1013,9 +1013,7 @@ export class PostService {
     return post;
   }
 
-  async incrementParentPostCommentCount(
-    postId: string,
-  ): Promise<void> {
+  async incrementParentPostCommentCount(postId: string): Promise<void> {
     const parentPost = await this.findParentPost(postId);
 
     await this.prisma.post.update({

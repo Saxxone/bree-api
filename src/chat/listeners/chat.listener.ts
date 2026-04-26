@@ -38,7 +38,9 @@ export class ChatCreatedListener {
       await Promise.all(
         event.toUserIds.map(async (recipientId) => {
           try {
-            if (await this.chatGateway.isUserInRoom(event.roomId, recipientId)) {
+            if (
+              await this.chatGateway.isUserInRoom(event.roomId, recipientId)
+            ) {
               return;
             }
             const recipient = await this.prisma.user.findUnique({

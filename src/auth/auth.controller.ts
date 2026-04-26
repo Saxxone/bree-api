@@ -66,9 +66,7 @@ export class AuthController {
   }
 
   @Get('profile')
-  async getProfile(
-    @Request() req: { user: JwtPayload },
-  ) {
+  async getProfile(@Request() req: { user: JwtPayload }) {
     return await this.userService.findUser(req.user.userId);
   }
 }

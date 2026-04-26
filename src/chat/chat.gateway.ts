@@ -116,7 +116,10 @@ export class ChatGateway implements OnGatewayConnection {
       return;
     }
     try {
-      await this.deviceService.assertDeviceOwnedByUser(deviceId, payload.userId);
+      await this.deviceService.assertDeviceOwnedByUser(
+        deviceId,
+        payload.userId,
+      );
     } catch {
       this.logger.debug(
         `WebSocket: device ${deviceId} not owned by user ${payload.userId}, disconnecting`,
@@ -146,7 +149,11 @@ export class ChatGateway implements OnGatewayConnection {
 
   private extractSocketToken(client: Socket): string | undefined {
     const auth = client.handshake.auth as { token?: string } | undefined;
-    if (auth?.token && typeof auth.token === 'string' && auth.token.length > 0) {
+    if (
+      auth?.token &&
+      typeof auth.token === 'string' &&
+      auth.token.length > 0
+    ) {
       return auth.token;
     }
     const h = client.handshake.headers.authorization;
@@ -157,10 +164,7 @@ export class ChatGateway implements OnGatewayConnection {
   }
 
   @SubscribeMessage('find-one-room')
-  async findOne(
-    @MessageBody() id: string,
-    @ConnectedSocket() client: Socket,
-  ) {
+  async findOne(@MessageBody() id: string, @ConnectedSocket() client: Socket) {
     const userId = (client.data as SocketData).userId;
     if (!userId) {
       throw new WsException('Unauthorized');
@@ -254,12 +258,15 @@ export class ChatGateway implements OnGatewayConnection {
     // device have joined, so a user can never see ciphertext addressed to a
     // sibling device.
     for (const envelope of chat.envelopes) {
-      this.server.to(`device:${envelope.recipientDeviceId}`).emit(
-        'receive-message',
-        {
+      this.server
+        .to(`device:${envelope.recipientDeviceId}`)
+        .emit('receive-message', {
+          id: chat.id,
           chatId: chat.id,
           senderUserId: chat.senderUserId,
           senderDeviceId: chat.senderDeviceId,
+          senderIdentityKeyCurve25519:
+            chat.senderDevice.identityKeyCurve25519,
           roomId: chat.roomId,
           createdAt: chat.createdAt,
           envelope: {
@@ -269,8 +276,16 @@ export class ChatGateway implements OnGatewayConnection {
             ciphertext: envelope.ciphertext,
             messageType: envelope.messageType,
           },
-        },
-      );
+          envelopes: [
+            {
+              id: envelope.id,
+              recipientUserId: envelope.recipientUserId,
+              recipientDeviceId: envelope.recipientDeviceId,
+              ciphertext: envelope.ciphertext,
+              messageType: envelope.messageType,
+            },
+          ],
+        });
     }
 
     return {

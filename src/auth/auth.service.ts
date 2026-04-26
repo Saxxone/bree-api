@@ -513,7 +513,11 @@ export class AuthService {
       | { exp?: number }
       | null
       | string;
-    if (decoded && typeof decoded === 'object' && typeof decoded.exp === 'number') {
+    if (
+      decoded &&
+      typeof decoded === 'object' &&
+      typeof decoded.exp === 'number'
+    ) {
       return new Date(decoded.exp * 1000);
     }
     // Fallback: refresh = 7d, access = 200d (mirrors signing options).

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeviceService } from './device.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -32,6 +33,7 @@ describe('DeviceService.claimKeys', () => {
       providers: [
         DeviceService,
         { provide: PrismaService, useValue: prisma },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
     service = module.get(DeviceService);

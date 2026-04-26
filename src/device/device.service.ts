@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -20,6 +21,13 @@ import { verifySignedPublicKey } from './olm-signature';
  */
 export const OTK_LOW_WATER_MARK = 20;
 export const OTK_TARGET = 100;
+export const DEVICE_KEYS_AVAILABLE_EVENT = 'device.keys.available';
+
+export interface DeviceKeysAvailableEventPayload {
+  userId: string;
+  deviceId: string;
+  source: 'register' | 'upload-otk';
+}
 
 /** Max unclaimed OTKs a device may hold to prevent unbounded storage. */
 export const OTK_POOL_MAX = 200;
@@ -39,7 +47,10 @@ export interface PublicDeviceSummary {
 export class DeviceService {
   private readonly logger = new Logger(DeviceService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   /**
    * Validate that each signed key is signed by the supplied identity key.
@@ -117,7 +128,9 @@ export class DeviceService {
       if (reused && existing) {
         // Clear old key material so we don't leak reservations from a prior
         // install.
-        await tx.deviceOneTimeKey.deleteMany({ where: { deviceId: reused.id } });
+        await tx.deviceOneTimeKey.deleteMany({
+          where: { deviceId: reused.id },
+        });
         await tx.deviceFallbackKey.deleteMany({
           where: { deviceId: reused.id },
         });
@@ -141,6 +154,12 @@ export class DeviceService {
       });
       return reused;
     });
+
+    this.eventEmitter.emit(DEVICE_KEYS_AVAILABLE_EVENT, {
+      userId,
+      deviceId: device.id,
+      source: 'register',
+    } satisfies DeviceKeysAvailableEventPayload);
 
     return this.toPublic(device);
   }
@@ -200,11 +219,19 @@ export class DeviceService {
       throw new ForbiddenException('Device is revoked');
     }
 
-    this.assertSignedKeys(
-      device.identityKeyEd25519,
-      dto.oneTimeKeys,
-      'one-time key',
-    );
+    const requestedOtks = Array.isArray(dto.oneTimeKeys) ? dto.oneTimeKeys : [];
+    if (requestedOtks.length === 0 && !dto.fallbackKey) {
+      throw new BadRequestException(
+        'Provide at least one oneTimeKey or a fallbackKey',
+      );
+    }
+    if (requestedOtks.length > 0) {
+      this.assertSignedKeys(
+        device.identityKeyEd25519,
+        requestedOtks,
+        'one-time key',
+      );
+    }
     if (dto.fallbackKey) {
       this.assertSignedKeys(
         device.identityKeyEd25519,
@@ -216,7 +243,7 @@ export class DeviceService {
     const unclaimedBefore = await this.prisma.deviceOneTimeKey.count({
       where: { deviceId, claimedAt: null },
     });
-    if (unclaimedBefore + dto.oneTimeKeys.length > OTK_POOL_MAX) {
+    if (unclaimedBefore + requestedOtks.length > OTK_POOL_MAX) {
       throw new BadRequestException('One-time key pool is full');
     }
 
@@ -227,13 +254,13 @@ export class DeviceService {
         await this.prisma.deviceOneTimeKey.findMany({
           where: {
             deviceId,
-            keyId: { in: dto.oneTimeKeys.map((k) => k.keyId) },
+            keyId: { in: requestedOtks.map((k) => k.keyId) },
           },
           select: { keyId: true },
         })
       ).map((r) => r.keyId),
     );
-    const toInsert = dto.oneTimeKeys.filter((k) => !existingIds.has(k.keyId));
+    const toInsert = requestedOtks.filter((k) => !existingIds.has(k.keyId));
 
     await this.prisma.$transaction(async (tx) => {
       if (toInsert.length > 0) {
@@ -265,6 +292,14 @@ export class DeviceService {
     });
 
     await this.touchLastSeen(deviceId);
+
+    if (toInsert.length > 0) {
+      this.eventEmitter.emit(DEVICE_KEYS_AVAILABLE_EVENT, {
+        userId,
+        deviceId,
+        source: 'upload-otk',
+      } satisfies DeviceKeysAvailableEventPayload);
+    }
 
     return {
       accepted: toInsert.length,

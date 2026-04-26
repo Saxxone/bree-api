@@ -3,10 +3,7 @@ import {
   generateKeyPairSync,
   sign as nodeSign,
 } from 'node:crypto';
-import {
-  verifyOlmSignature,
-  verifySignedPublicKey,
-} from './olm-signature';
+import { verifyOlmSignature, verifySignedPublicKey } from './olm-signature';
 
 /**
  * The Olm protocol signs over the *base64-encoded* public key string with the
@@ -30,9 +27,11 @@ function signedKeyFixture(message: string) {
   const keyObj = createPrivateKey(
     privateKey.export({ format: 'pem', type: 'pkcs8' }) as string,
   );
-  const signature = nodeSign(null, Buffer.from(message, 'utf8'), keyObj).toString(
-    'base64',
-  );
+  const signature = nodeSign(
+    null,
+    Buffer.from(message, 'utf8'),
+    keyObj,
+  ).toString('base64');
   return { identityKeyEd25519, signature };
 }
 
@@ -40,9 +39,9 @@ describe('verifyOlmSignature', () => {
   it('accepts a freshly generated Ed25519 signature', () => {
     const message = 'curve25519-public-key-base64';
     const { identityKeyEd25519, signature } = signedKeyFixture(message);
-    expect(
-      verifyOlmSignature({ identityKeyEd25519, message, signature }),
-    ).toBe(true);
+    expect(verifyOlmSignature({ identityKeyEd25519, message, signature })).toBe(
+      true,
+    );
   });
 
   it('rejects a signature when the message is altered', () => {
@@ -63,18 +62,18 @@ describe('verifyOlmSignature', () => {
     // Padding by one byte yields a 33B raw key which must be rejected before
     // even trying to verify.
     const identityKeyEd25519 = Buffer.alloc(33).toString('base64');
-    expect(
-      verifyOlmSignature({ identityKeyEd25519, message, signature }),
-    ).toBe(false);
+    expect(verifyOlmSignature({ identityKeyEd25519, message, signature })).toBe(
+      false,
+    );
   });
 
   it('rejects a non-64B signature', () => {
     const message = 'msg';
     const { identityKeyEd25519 } = signedKeyFixture(message);
     const signature = Buffer.alloc(32).toString('base64');
-    expect(
-      verifyOlmSignature({ identityKeyEd25519, message, signature }),
-    ).toBe(false);
+    expect(verifyOlmSignature({ identityKeyEd25519, message, signature })).toBe(
+      false,
+    );
   });
 });
 

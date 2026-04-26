@@ -5,10 +5,7 @@ import { createPublicKey, verify as nodeVerify } from 'node:crypto';
  * `crypto` can verify with it. Olm stores the raw key bytes; Node's key APIs
  * only accept DER/PEM, so we prefix the standard Ed25519 OID header.
  */
-const ED25519_DER_PREFIX = Buffer.from(
-  '302a300506032b6570032100',
-  'hex',
-);
+const ED25519_DER_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 function base64ToBuffer(value: string): Buffer | null {
   try {

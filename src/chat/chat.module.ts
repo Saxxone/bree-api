@@ -8,6 +8,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { DeviceModule } from 'src/device/device.module';
 import { ChatCreatedListener } from './listeners/chat.listener';
+import { DeviceAvailabilityListener } from './listeners/device-availability.listener';
 
 @Module({
   imports: [AuthModule, NotificationModule, DeviceModule],
@@ -18,6 +19,7 @@ import { ChatCreatedListener } from './listeners/chat.listener';
     UserService,
     PrismaService,
     ChatCreatedListener,
+    DeviceAvailabilityListener,
   ],
 })
 export class ChatModule {}

@@ -22,13 +22,18 @@ export class RoomController {
     @Request() req: any,
     @Query('skip') skip?: string,
     @Query('take') take?: string,
+    @Query('deviceId') deviceId?: string,
   ) {
     const s = Number.parseInt(String(skip ?? '0'), 10);
     const t = Number.parseInt(String(take ?? '50'), 10);
+    const rawDevice = deviceId?.trim();
     return this.roomService.findAllWithParticipant(
       req.user.userId,
       Number.isFinite(s) ? Math.max(0, s) : 0,
       Number.isFinite(t) ? Math.min(Math.max(1, t), 100) : 50,
+      rawDevice && rawDevice !== 'undefined' && rawDevice !== 'null'
+        ? rawDevice
+        : undefined,
     );
   }
 
@@ -63,11 +68,19 @@ export class RoomController {
     @Request() req: { user: { userId: string } },
     @Query('user1') user1Id: string,
     @Query('user2') user2Id: string,
+    @Query('deviceId') deviceId?: string,
   ) {
     if (user1Id !== req.user.userId && user2Id !== req.user.userId) {
       throw new ForbiddenException('Must be one of the participants');
     }
-    return this.roomService.findRoomByParticipantsOrCreate(user1Id, user2Id);
+    const rawDevice = deviceId?.trim();
+    return this.roomService.findRoomByParticipantsOrCreate(
+      user1Id,
+      user2Id,
+      rawDevice && rawDevice !== 'undefined' && rawDevice !== 'null'
+        ? rawDevice
+        : undefined,
+    );
   }
 
   @Patch('/update/:id')
@@ -84,9 +97,16 @@ export class RoomController {
   async findOne(
     @Param('id') id: string,
     @Request() req: { user: { userId: string } },
+    @Query('deviceId') deviceId?: string,
   ) {
     await this.roomService.assertUserIsRoomParticipant(id, req.user.userId);
-    return this.roomService.findOne(id);
+    const rawDevice = deviceId?.trim();
+    return this.roomService.findOne(
+      id,
+      rawDevice && rawDevice !== 'undefined' && rawDevice !== 'null'
+        ? rawDevice
+        : undefined,
+    );
   }
 
   @Delete(':id')

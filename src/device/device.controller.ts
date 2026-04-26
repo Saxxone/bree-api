@@ -54,8 +54,8 @@ export class DeviceController {
    */
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Post('keys/claim')
-  claim(@Body() dto: ClaimKeysDto) {
-    return this.deviceService.claimKeys(dto.targetUserId);
+  async claim(@Body() dto: ClaimKeysDto) {
+    return { bundles: await this.deviceService.claimKeys(dto.targetUserId) };
   }
 
   /** Uploader-side OTK replenish for `id` (caller must own device). */

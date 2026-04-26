@@ -52,8 +52,7 @@ model User {
   deletedAt                 DateTime?
   sentChats                 Chat[]                     @relation("chatSender")
   receivedEnvelopes         ChatEnvelope[]             @relation("chatRecipient")
-  Room                      Room?                      @relation(fields: [roomId], references: [id])
-  roomId                    String?
+  rooms                     Room[]
   /// Olm per-device identity + prekeys (one row per web/mobile/desktop install).
   devices                   Device[]
   LongPost                  LongPost[]
